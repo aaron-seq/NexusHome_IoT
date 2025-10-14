@@ -1,0 +1,66 @@
+services:
+  - type: web
+    name: nexushome-iot-platform
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: modernization-update
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health/ready
+    
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://+:10000
+      - key: ConnectionStrings__DefaultConnection
+        value: Data Source=./data/nexushome.db
+      - key: JwtAuthentication__SecretKey
+        generateValue: true
+      - key: JwtAuthentication__Issuer
+        value: NexusHome.IoT
+      - key: JwtAuthentication__Audience
+        value: NexusHome.Clients
+      - key: MqttBroker__Host
+        value: localhost
+      - key: MqttBroker__Port
+        value: 1883
+      - key: Logging__LogLevel__Default
+        value: Information
+      - key: DOTNET_CLI_TELEMETRY_OPTOUT
+        value: 1
+    
+    buildCommand: echo "Using Docker build"
+    startCommand: dotnet NexusHome.IoT.dll
+    
+    disk:
+      name: nexushome-data
+      mountPath: /application-runtime/data
+      sizeGB: 1
+
+  - type: background
+    name: nexushome-background-services
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: modernization-update
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: BackgroundServices__Enabled
+        value: true
+      - key: ConnectionStrings__DefaultConnection
+        value: Data Source=./data/nexushome.db
+    
+    startCommand: dotnet NexusHome.IoT.dll --background-services
+
+databases:
+  - name: nexushome-sqlite
+    databaseName: nexushome_iot
+    user: nexususer
+    plan: free
+    region: oregon
