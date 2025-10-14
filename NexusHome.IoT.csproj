@@ -1,0 +1,308 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    
+    <!-- Assembly Information -->
+    <AssemblyName>NexusHome.IoT</AssemblyName>
+    <RootNamespace>NexusHome.IoT</RootNamespace>
+    <Version>2.1.0</Version>
+    <AssemblyVersion>2.1.0.0</AssemblyVersion>
+    <FileVersion>2.1.0.0</FileVersion>
+    <Authors>Aaron Sequeira</Authors>
+    <Company>NexusHome Technologies</Company>
+    <Product>NexusHome Smart Home IoT Platform</Product>
+    <Description>Advanced IoT-enabled smart home energy management system with AI-powered predictive analytics, real-time monitoring, and automated optimization.</Description>
+    <Copyright>Copyright © NexusHome Technologies 2025</Copyright>
+    <RepositoryUrl>https://github.com/aaron-seq/NexusHome_IoT</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/aaron-seq/NexusHome_IoT</PackageProjectUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    
+    <!-- Build Configuration -->
+    <LangVersion>12.0</LangVersion>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <WarningsAsErrors />
+    <WarningsNotAsErrors />
+    
+    <!-- Performance Optimizations -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
+    <TieredCompilation>true</TieredCompilation>
+    <TieredCompilationQuickJit>true</TieredCompilationQuickJit>
+    
+    <!-- Deployment Configuration -->
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    
+    <!-- Debugging and Analysis -->
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <Optimize>false</Optimize>
+    <EnableDetailedErrors>true</EnableDetailedErrors>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <Optimize>true</Optimize>
+    <DefineConstants>TRACE</DefineConstants>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+
+  <!-- Docker Configuration -->
+  <PropertyGroup>
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    <DockerfileContext>.</DockerfileContext>
+    <DockerComposeProjectPath>docker-compose.yml</DockerComposeProjectPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Core .NET 8 Web Packages -->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.10" />
+    <PackageReference Include="Microsoft.AspNetCore.Authorization" Version="8.0.10" />
+
+    <!-- Entity Framework Core -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.10">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.10">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Proxies" Version="8.0.10" />
+
+    <!-- Cloud and Azure Services -->
+    <PackageReference Include="Azure.Identity" Version="1.12.1" />
+    <PackageReference Include="Microsoft.Azure.Devices.Client" Version="1.42.3" />
+    <PackageReference Include="Microsoft.Extensions.Azure" Version="1.7.5" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.22.1" />
+
+    <!-- IoT Communication Protocols -->
+    <PackageReference Include="MQTTnet" Version="4.3.7.1207" />
+    <PackageReference Include="MQTTnet.AspNetCore" Version="4.3.7.1207" />
+    <PackageReference Include="MQTTnet.Extensions.ManagedClient" Version="4.3.7.1207" />
+
+    <!-- Machine Learning and AI -->
+    <PackageReference Include="Microsoft.ML" Version="3.0.1" />
+    <PackageReference Include="Microsoft.ML.TimeSeries" Version="3.0.1" />
+    <PackageReference Include="Microsoft.ML.AutoML" Version="0.21.1" />
+    <PackageReference Include="Microsoft.ML.LightGbm" Version="3.0.1" />
+    <PackageReference Include="Microsoft.ML.FastTree" Version="3.0.1" />
+
+    <!-- Real-time Communication -->
+    <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.1.0" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.10" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack" Version="8.0.10" />
+
+    <!-- Caching and Data Storage -->
+    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="8.0.10" />
+    <PackageReference Include="StackExchange.Redis" Version="2.8.16" />
+
+    <!-- Logging and Monitoring -->
+    <PackageReference Include="Serilog.AspNetCore" Version="8.0.2" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="Serilog.Sinks.Seq" Version="8.0.0" />
+    <PackageReference Include="Serilog.Extensions.Hosting" Version="8.0.0" />
+    <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
+    <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />
+
+    <!-- API Documentation -->
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.8.1" />
+    <PackageReference Include="Swashbuckle.AspNetCore.Annotations" Version="6.8.1" />
+    <PackageReference Include="Swashbuckle.AspNetCore.Filters" Version="8.0.2" />
+
+    <!-- HTTP Clients and API Integration -->
+    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="8.0.10" />
+    <PackageReference Include="Polly" Version="8.4.2" />
+    <PackageReference Include="Polly.Extensions.Http" Version="3.0.0" />
+    <PackageReference Include="Refit" Version="7.2.22" />
+    <PackageReference Include="Refit.HttpClientFactory" Version="7.2.22" />
+
+    <!-- Security and Cryptography -->
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.1.2" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="8.0.10" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" Version="8.0.10" />
+
+    <!-- Health Checks and Diagnostics -->
+    <PackageReference Include="Microsoft.AspNetCore.Diagnostics.HealthChecks" Version="2.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="8.0.10" />
+    <PackageReference Include="AspNetCore.HealthChecks.Redis" Version="8.0.1" />
+    <PackageReference Include="AspNetCore.HealthChecks.SqlServer" Version="8.0.2" />
+    <PackageReference Include="AspNetCore.HealthChecks.UI" Version="8.0.2" />
+    <PackageReference Include="AspNetCore.HealthChecks.UI.InMemory.Storage" Version="8.0.1" />
+
+    <!-- Background Services and Scheduling -->
+    <PackageReference Include="Hangfire.AspNetCore" Version="1.8.14" />
+    <PackageReference Include="Hangfire.SqlServer" Version="1.8.14" />
+    <PackageReference Include="NCronTab" Version="3.3.3" />
+    <PackageReference Include="Quartz" Version="3.13.0" />
+    <PackageReference Include="Quartz.Extensions.Hosting" Version="3.13.0" />
+
+    <!-- Data Processing and Serialization -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <PackageReference Include="AutoMapper" Version="13.0.1" />
+    <PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="13.0.1" />
+    <PackageReference Include="FluentValidation" Version="11.10.0" />
+    <PackageReference Include="FluentValidation.AspNetCore" Version="11.3.0" />
+
+    <!-- Architecture and Patterns -->
+    <PackageReference Include="MediatR" Version="12.4.1" />
+    <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="11.1.0" />
+    <PackageReference Include="FluentResults" Version="3.16.0" />
+
+    <!-- Performance and Utilities -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.1" />
+    <PackageReference Include="System.Linq.Async" Version="6.0.1" />
+    <PackageReference Include="Microsoft.Extensions.ObjectPool" Version="8.0.10" />
+    <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
+
+    <!-- Rate Limiting and Throttling -->
+    <PackageReference Include="Microsoft.AspNetCore.RateLimiting" Version="8.0.10" />
+    <PackageReference Include="AspNetCoreRateLimit" Version="5.0.0" />
+
+    <!-- Testing Support -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.10" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Moq" Version="4.20.72" />
+    <PackageReference Include="FluentAssertions" Version="6.12.1" />
+    <PackageReference Include="Testcontainers" Version="3.10.0" />
+    
+    <!-- Docker Support -->
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.21.0" />
+    
+    <!-- Deployment and Cloud Platform Support -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.AzureKeyVault" Version="8.0.0" />
+    <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.22.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Project Folders -->
+    <Folder Include="wwwroot\" />
+    <Folder Include="Logs\" />
+    <Folder Include="Data\" />
+    <Folder Include="Uploads\" />
+    <Folder Include="Certificates\" />
+    
+    <!-- Source Code Organization -->
+    <Folder Include="Core\Domain\" />
+    <Folder Include="Core\Services\" />
+    <Folder Include="Core\Services\Interfaces\" />
+    <Folder Include="Application\DTOs\" />
+    <Folder Include="Application\Hubs\" />
+    <Folder Include="Application\Mappings\" />
+    <Folder Include="Application\Commands\" />
+    <Folder Include="Application\Queries\" />
+    <Folder Include="Application\Validators\" />
+    <Folder Include="Infrastructure\Data\" />
+    <Folder Include="Infrastructure\Services\" />
+    <Folder Include="Infrastructure\Configuration\" />
+    <Folder Include="Infrastructure\External\" />
+    <Folder Include="Infrastructure\Repositories\" />
+    <Folder Include="API\Controllers\" />
+    <Folder Include="API\Middleware\" />
+    <Folder Include="API\Filters\" />
+    
+    <!-- ML and AI Resources -->
+    <Folder Include="AI\Models\" />
+    <Folder Include="AI\Training\" />
+    <Folder Include="AI\Datasets\" />
+    
+    <!-- Testing -->
+    <Folder Include="Tests\Unit\" />
+    <Folder Include="Tests\Integration\" />
+    <Folder Include="Tests\E2E\" />
+    
+    <!-- Configuration and Deployment -->
+    <Folder Include="Configuration\" />
+    <Folder Include="Scripts\" />
+    <Folder Include="Docker\" />
+    <Folder Include="Deployment\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Configuration Files -->
+    <Content Include="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="appsettings.Development.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="appsettings.Production.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="appsettings.Staging.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    
+    <!-- Docker Files -->
+    <Content Include="Dockerfile">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="docker-compose.yml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="docker-compose.override.yml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="docker-compose.prod.yml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    
+    <!-- Platform-specific deployment files -->
+    <Content Include="vercel.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="render.yaml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="railway.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    
+    <!-- Documentation -->
+    <Content Include="README.md" />
+    <Content Include="CHANGELOG.md" />
+    <Content Include="LICENSE" />
+  </ItemGroup>
+
+  <!-- Build Events -->
+  <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+    <Exec Command="echo Building NexusHome IoT Platform v$(Version) in $(Configuration) mode..." />
+  </Target>
+
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="echo Build completed successfully for $(Configuration) configuration" />
+  </Target>
+  
+  <!-- Deployment Preparation -->
+  <Target Name="PrepareForDeployment" AfterTargets="Publish">
+    <Message Text="Preparing deployment artifacts for cloud platforms..." Importance="high" />
+  </Target>
+
+</Project>
