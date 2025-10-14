@@ -1,0 +1,175 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    
+    <!-- Test configuration -->
+    <CollectCoverage>true</CollectCoverage>
+    <CoverletOutputFormat>opencover</CoverletOutputFormat>
+    <CoverletOutput>../TestResults/coverage.opencover.xml</CoverletOutput>
+    <Threshold>80</Threshold>
+    <ThresholdType>line</ThresholdType>
+    <ExcludeByFile>**/Program.cs,**/Migrations/*.cs</ExcludeByFile>
+    
+    <!-- Test runner configuration -->
+    <TestTimeout>300000</TestTimeout> <!-- 5 minutes -->
+    <VSTestTimeout>300</VSTestTimeout>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Core testing framework -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.6.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="xunit.runner.console" Version="2.5.3" />
+    
+    <!-- Assertion libraries -->
+    <PackageReference Include="FluentAssertions" Version="6.12.0" />
+    <PackageReference Include="Shouldly" Version="4.2.1" />
+    
+    <!-- Mocking frameworks -->
+    <PackageReference Include="Moq" Version="4.20.69" />
+    <PackageReference Include="NSubstitute" Version="5.1.0" />
+    
+    <!-- Integration testing -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+    
+    <!-- Test data generation -->
+    <PackageReference Include="Bogus" Version="34.0.2" />
+    <PackageReference Include="AutoFixture" Version="4.18.1" />
+    <PackageReference Include="AutoFixture.Xunit2" Version="4.18.1" />
+    <PackageReference Include="AutoFixture.AutoMoq" Version="4.18.1" />
+    
+    <!-- Code coverage -->
+    <PackageReference Include="coverlet.collector" Version="6.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="coverlet.msbuild" Version="6.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    
+    <!-- Testing utilities -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="8.0.0" />
+    
+    <!-- Test database providers -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />
+    <PackageReference Include="Testcontainers" Version="3.6.0" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="3.6.0" />
+    
+    <!-- HTTP testing -->
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="8.0.0" />
+    <PackageReference Include="WireMock.Net" Version="1.5.51" />
+    
+    <!-- Performance testing -->
+    <PackageReference Include="BenchmarkDotNet" Version="0.13.10" />
+    <PackageReference Include="NBomber" Version="5.3.1" />
+    
+    <!-- Snapshot testing -->
+    <PackageReference Include="Verify.Xunit" Version="22.11.4" />
+    <PackageReference Include="Verify.AspNetCore" Version="8.8.0" />
+    
+    <!-- Test reporting -->
+    <PackageReference Include="ReportGenerator" Version="5.2.0" />
+    <PackageReference Include="Microsoft.TestPlatform.TestHost" Version="17.8.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Project references -->
+    <ProjectReference Include="../API/NexusHome.IoT.API.csproj" />
+    <ProjectReference Include="../Application/NexusHome.IoT.Application.csproj" />
+    <ProjectReference Include="../Core/NexusHome.IoT.Core.csproj" />
+    <ProjectReference Include="../Infrastructure/NexusHome.IoT.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Test configuration files -->
+    <None Include="appsettings.Test.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="testhost.dll.config" CopyToOutputDirectory="PreserveNewest" />
+    
+    <!-- Test data files -->
+    <None Include="TestData/**/*" CopyToOutputDirectory="PreserveNewest" />
+    
+    <!-- Test certificates for HTTPS testing -->
+    <None Include="TestCertificates/**/*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Create directories for test artifacts -->
+    <None Include="../TestResults/" />
+    <None Include="TestOutput/" />
+    <None Include="Screenshots/" />
+  </ItemGroup>
+
+  <!-- Custom MSBuild targets -->
+  <Target Name="CreateTestResultsDirectory" BeforeTargets="Build">
+    <MakeDir Directories="$(MSBuildProjectDirectory)/../TestResults" Condition="!Exists('$(MSBuildProjectDirectory)/../TestResults')" />
+    <MakeDir Directories="$(MSBuildProjectDirectory)/TestOutput" Condition="!Exists('$(MSBuildProjectDirectory)/TestOutput')" />
+  </Target>
+
+  <!-- Test execution configuration -->
+  <Target Name="RunTests" DependsOnTargets="Build">
+    <Message Text="Running comprehensive test suite..." Importance="high" />
+    <Exec Command="dotnet test --configuration $(Configuration) --logger trx --collect:\&quot;XPlat Code Coverage\&quot; --results-directory ../TestResults" />
+  </Target>
+
+  <!-- Code coverage report generation -->
+  <Target Name="GenerateCoverageReport" DependsOnTargets="RunTests">
+    <Message Text="Generating code coverage report..." Importance="high" />
+    <ItemGroup>
+      <CoverageFiles Include="../TestResults/**/coverage.opencover.xml" />
+    </ItemGroup>
+    <Exec Command="reportgenerator -reports:@(CoverageFiles) -targetdir:../TestResults/CoverageReport -reporttypes:Html;Badges" 
+          Condition="'@(CoverageFiles)' != ''" 
+          ContinueOnError="true" />
+  </Target>
+
+  <!-- Performance test execution -->
+  <Target Name="RunPerformanceTests">
+    <Message Text="Running performance benchmark tests..." Importance="high" />
+    <Exec Command="dotnet run --project . --configuration Release --framework net8.0 -- --job short --filter *Performance*" 
+          ContinueOnError="true" />
+  </Target>
+
+  <!-- Integration test with real dependencies -->
+  <Target Name="RunIntegrationTests">
+    <Message Text="Running integration tests with external dependencies..." Importance="high" />
+    <Exec Command="dotnet test --configuration $(Configuration) --filter Category=Integration --logger trx --results-directory ../TestResults/Integration" />
+  </Target>
+
+  <!-- Load test execution -->
+  <Target Name="RunLoadTests">
+    <Message Text="Running load tests..." Importance="high" />
+    <Exec Command="dotnet test --configuration $(Configuration) --filter Category=Load --logger trx --results-directory ../TestResults/Load" />
+  </Target>
+
+  <!-- Clean test artifacts -->
+  <Target Name="CleanTestArtifacts">
+    <Message Text="Cleaning test artifacts..." Importance="high" />
+    <RemoveDir Directories="../TestResults" />
+    <RemoveDir Directories="TestOutput" />
+    <RemoveDir Directories="Screenshots" />
+  </Target>
+
+  <!-- Comprehensive test suite -->
+  <Target Name="RunFullTestSuite" DependsOnTargets="CleanTestArtifacts;CreateTestResultsDirectory;RunTests;GenerateCoverageReport">
+    <Message Text="Full test suite completed. Check TestResults directory for reports." Importance="high" />
+  </Target>
+
+</Project>
