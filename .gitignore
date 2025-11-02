@@ -1,0 +1,9 @@
+**/.env
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/TestResults/
+**/coverage*
+node_modules/
+Dockerfile-*cache

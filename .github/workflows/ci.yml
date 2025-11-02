@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, fix/**, feature/** ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-test-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build --collect:"XPlat Code Coverage"
+
+      - name: Upload Test Results (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            **/TestResults/**/*.trx
+            **/coverage.cobertura.xml
+
+      - name: Build Docker image
+        run: |
+          docker build -t nexushome-iot:ci --target final-runtime .
