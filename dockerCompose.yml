@@ -1,30 +1,28 @@
 version: '3.8'
 
 services:
-  # Main NexusHome Application
   nexushome-app:
     build:
       context: .
       dockerfile: Dockerfile
-      target: runtime
+      target: final-runtime
     image: nexushome-iot:latest
     container_name: nexushome-app
     restart: unless-stopped
     ports:
-      - "5000:80"
-      - "5001:443"
+      - "5000:8080"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+:80;https://+:443
-      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=NexusHomeIoT;User=sa;Password=NexusHome@2025!;TrustServerCertificate=true;MultipleActiveResultSets=true
-      - ConnectionStrings__Redis=redis:6379,password=NexusHome@2025!
-      - MqttBroker__Host=mqtt-broker
-      - MqttBroker__Port=1883
-      - MqttBroker__Username=nexususer
-      - MqttBroker__Password=NexusHome@2025!
-      - JwtAuthentication__SecretKey=NexusHome-SuperSecure-JWT-SigningKey-2025-Version
-      - JwtAuthentication__Issuer=NexusHome.IoT
-      - JwtAuthentication__Audience=NexusHome.Clients
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Development}
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=${ConnectionStrings__DefaultConnection}
+      - ConnectionStrings__Redis=${ConnectionStrings__Redis}
+      - MqttBroker__Host=${MqttBroker__Host}
+      - MqttBroker__Port=${MqttBroker__Port}
+      - MqttBroker__Username=${MqttBroker__Username}
+      - MqttBroker__Password=${MqttBroker__Password}
+      - JwtAuthentication__SecretKey=${JwtAuthentication__SecretKey}
+      - JwtAuthentication__Issuer=${JwtAuthentication__Issuer}
+      - JwtAuthentication__Audience=${JwtAuthentication__Audience}
       - WeatherApi__ApiKey=${WEATHER_API_KEY:-}
     depends_on:
       sqlserver:
@@ -34,47 +32,44 @@ services:
       mqtt-broker:
         condition: service_healthy
     volumes:
-      - app-logs:/app/logs
-      - app-data:/app/data
-      - app-uploads:/app/uploads
+      - app-logs:/application-runtime/logs
+      - app-data:/application-runtime/data
+      - app-uploads:/application-runtime/uploads
     networks:
       - nexushome-net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health/ready"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
 
-  # SQL Server Database
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: nexushome-sqlserver
     restart: unless-stopped
     environment:
       - ACCEPT_EULA=Y
-      - SA_PASSWORD=NexusHome@2025!
+      - SA_PASSWORD=${SQLSERVER_SA_PASSWORD}
       - MSSQL_PID=Developer
     ports:
       - "1433:1433"
     volumes:
       - sqlserver-data:/var/opt/mssql
-      - ./Scripts/database:/docker-entrypoint-initdb.d:ro
     networks:
       - nexushome-net
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P NexusHome@2025! -Q 'SELECT 1' -b -o /dev/null"]
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${SQLSERVER_SA_PASSWORD} -Q 'SELECT 1' -b -o /dev/null"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 60s
 
-  # Redis Cache
   redis:
     image: redis:7-alpine
     container_name: nexushome-redis
     restart: unless-stopped
-    command: redis-server --requirepass NexusHome@2025! --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
     volumes:
@@ -82,13 +77,12 @@ services:
     networks:
       - nexushome-net
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "NexusHome@2025!", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 30s
       timeout: 3s
       retries: 5
       start_period: 30s
 
-  # MQTT Broker
   mqtt-broker:
     image: eclipse-mosquitto:2.0
     container_name: nexushome-mqtt
@@ -98,7 +92,6 @@ services:
       - "9001:9001"
     volumes:
       - ./Configuration/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - ./Configuration/passwd:/mosquitto/config/passwd:ro
       - mqtt-data:/mosquitto/data
       - mqtt-logs:/mosquitto/log
     networks:
@@ -110,101 +103,15 @@ services:
       retries: 3
       start_period: 30s
 
-  # InfluxDB for Time Series Data
-  influxdb:
-    image: influxdb:2.7-alpine
-    container_name: nexushome-influxdb
-    restart: unless-stopped
-    environment:
-      - DOCKER_INFLUXDB_INIT_MODE=setup
-      - DOCKER_INFLUXDB_INIT_USERNAME=admin
-      - DOCKER_INFLUXDB_INIT_PASSWORD=NexusHome@2025!
-      - DOCKER_INFLUXDB_INIT_ORG=NexusHome
-      - DOCKER_INFLUXDB_INIT_BUCKET=iot_metrics
-      - DOCKER_INFLUXDB_INIT_RETENTION=90d
-    ports:
-      - "8086:8086"
-    volumes:
-      - influxdb-data:/var/lib/influxdb2
-    networks:
-      - nexushome-net
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8086/ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+volumes:
+  sqlserver-data:
+  redis-data:
+  mqtt-data:
+  mqtt-logs:
+  app-logs:
+  app-data:
+  app-uploads:
 
-  # Grafana for Visualization
-  grafana:
-    image: grafana/grafana:10.2.0
-    container_name: nexushome-grafana
-    restart: unless-stopped
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=NexusHome@2025!
-      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-worldmap-panel
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./Configuration/grafana:/etc/grafana/provisioning:ro
-    depends_on:
-      - influxdb
-    networks:
-      - nexushome-net
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-
-  # Seq for Centralized Logging
-  seq:
-    image: datalust/seq:latest
-    container_name: nexushome-seq
-    restart: unless-stopped
-    environment:
-      - ACCEPT_EULA=Y
-      - SEQ_FIRSTRUN_ADMINUSERNAME=admin
-      - SEQ_FIRSTRUN_ADMINPASSWORDHASH=NexusHome@2025!
-    ports:
-      - "5341:80"
-    volumes:
-      - seq-data:/data
-    networks:
-      - nexushome-net
-
-# Networks
 networks:
   nexushome-net:
     driver: bridge
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.25.0.0/16
-          gateway: 172.25.0.1
-
-# Volumes
-volumes:
-  sqlserver-data:
-    driver: local
-  redis-data:
-    driver: local
-  mqtt-data:
-    driver: local
-  mqtt-logs:
-    driver: local
-  influxdb-data:
-    driver: local
-  grafana-data:
-    driver: local
-  seq-data:
-    driver: local
-  app-logs:
-    driver: local
-  app-data:
-    driver: local
-  app-uploads:
-    driver: local
