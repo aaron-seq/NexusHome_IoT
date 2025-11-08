@@ -9,6 +9,19 @@
 
 ---
 
+## Contributing
+
+We welcome contributions! Please see our contributing guidelines:
+
+- [Contributing Guide](CONTRIBUTING.md) - How to contribute to this project
+- [Code of Conduct](CODE_OF_CONDUCT.md) - Our community standards
+
+### Quick Links
+
+- Report bugs and request features through [GitHub Issues](https://github.com/aaron-seq/NexusHome_IoT/issues)
+- Submit pull requests following our [PR guidelines](CONTRIBUTING.md#pull-request-process)
+- Join discussions in [GitHub Discussions](https://github.com/aaron-seq/NexusHome_IoT/discussions)
+
 ## Features
 
 ### 🏡 **Smart Home Management**
