@@ -20,6 +20,12 @@ public static class DatabaseSeeder
                 await SeedDemoAutomationRulesAsync(context, logger);
             }
 
+            // Seed default user if none exist
+            if (!context.Users.Any())
+            {
+                await SeedDefaultUserAsync(context, logger);
+            }
+
             await context.SaveChangesAsync();
             logger.LogInformation("Database seeding completed successfully");
         }
@@ -160,5 +166,22 @@ public static class DatabaseSeeder
 
         context.AutomationRules.AddRange(demoRules);
         logger.LogInformation("Added {Count} demo automation rules", demoRules.Length);
+
+    }
+
+    private static async Task SeedDefaultUserAsync(SmartHomeDbContext context, ILogger logger)
+    {
+        var adminUser = new User
+        {
+            Username = "admin",
+            Email = "admin@nexushome.local",
+            PasswordHash = "admin123", // In real world use BCrypt
+            Role = "Administrator",
+            CreatedAt = DateTime.UtcNow,
+            IsActive = true
+        };
+
+        context.Users.Add(adminUser);
+        logger.LogInformation("Created default admin user");
     }
 }

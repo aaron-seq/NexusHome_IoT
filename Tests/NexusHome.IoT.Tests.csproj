@@ -92,10 +92,7 @@
 
   <ItemGroup>
     <!-- Project references -->
-    <ProjectReference Include="../API/NexusHome.IoT.API.csproj" />
-    <ProjectReference Include="../Application/NexusHome.IoT.Application.csproj" />
-    <ProjectReference Include="../Core/NexusHome.IoT.Core.csproj" />
-    <ProjectReference Include="../Infrastructure/NexusHome.IoT.Infrastructure.csproj" />
+    <ProjectReference Include="..\NexusHome.IoT.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -14,172 +14,10 @@ using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using NexusHome.Energy; // Added for EnergyOptimizationService
 
-// Configure Serilog early in the startup process
-Log.Logger = new LoggerConfiguration()
-    .WriteTo.Console()
-    .WriteTo.File("logs/nexushome-.txt", 
-        rollingInterval: RollingInterval.Day, 
-        retainedFileCountLimit: 30,
-        shared: true,
-        flushToDiskInterval: TimeSpan.FromSeconds(1))
-    .CreateBootstrapLogger();
+// ...
 
-try
-{
-    var builder = WebApplication.CreateBuilder(args);
-
-    // Configure Serilog from appsettings
-    builder.Host.UseSerilog((context, configuration) =>
-        configuration.ReadFrom.Configuration(context.Configuration));
-
-    // Add services to the container
-    builder.Services.AddNexusHomeServices(builder.Configuration);
-    
-    var app = builder.Build();
-    
-    // Configure the HTTP request pipeline
-    app.ConfigureNexusHomePipeline();
-    
-    // Initialize database and run application
-    await app.InitializeDatabaseAsync();
-    
-    Log.Information("🚀 NexusHome IoT System started successfully");
-    app.Run();
-}
-catch (Exception ex)
-{
-    Log.Fatal(ex, "❌ Application terminated unexpectedly");
-    throw;
-}
-finally
-{
-    Log.CloseAndFlush();
-}
-
-/// <summary>
-/// Extension methods for service configuration
-/// </summary>
-public static class ServiceCollectionExtensions
-{
-    public static IServiceCollection AddNexusHomeServices(this IServiceCollection services, IConfiguration configuration)
-    {
-        // Core infrastructure
-        services.AddDatabaseServices(configuration);
-        services.AddAuthenticationServices(configuration);
-        services.AddCachingServices(configuration);
-        services.AddMessagingServices(configuration);
-        
-        // Application services
-        services.AddBusinessLogicServices();
-        services.AddBackgroundServices();
-        
-        // API and Web services
-        services.AddWebApiServices();
-        services.AddRealTimeServices();
-        services.AddMonitoringServices();
-        
-        // External integrations
-        services.AddThirdPartyIntegrations(configuration);
-        
-        return services;
-    }
-    
-    private static IServiceCollection AddDatabaseServices(this IServiceCollection services, IConfiguration configuration)
-    {
-        services.AddDbContext<SmartHomeDbContext>(options =>
-        {
-            var connectionString = configuration.GetConnectionString("DefaultConnection") 
-                ?? "Server=localhost;Database=NexusHomeIoT;Trusted_Connection=true;MultipleActiveResultSets=true;TrustServerCertificate=true";
-            
-            options.UseSqlServer(connectionString, sqlOptions =>
-            {
-                sqlOptions.EnableRetryOnFailure(
-                    maxRetryCount: 3,
-                    maxRetryDelay: TimeSpan.FromSeconds(30),
-                    errorNumbersToAdd: null);
-            });
-            
-            options.EnableSensitiveDataLogging(false);
-            options.EnableServiceProviderCaching();
-        });
-        
-        return services;
-    }
-    
-    private static IServiceCollection AddAuthenticationServices(this IServiceCollection services, IConfiguration configuration)
-    {
-        var jwtSettings = configuration.GetSection("JwtAuthentication").Get<JwtAuthenticationSettings>() 
-            ?? new JwtAuthenticationSettings();
-            
-        services.AddSingleton(jwtSettings);
-        
-        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(options =>
-            {
-                options.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidateLifetime = true,
-                    ValidateIssuerSigningKey = true,
-                    ValidIssuer = jwtSettings.Issuer,
-                    ValidAudience = jwtSettings.Audience,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.SecretKey)),
-                    ClockSkew = TimeSpan.FromMinutes(5)
-                };
-                
-                options.Events = new JwtBearerEvents
-                {
-                    OnMessageReceived = context =>
-                    {
-                        var accessToken = context.Request.Query["access_token"];
-                        var path = context.HttpContext.Request.Path;
-                        
-                        if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
-                        {
-                            context.Token = accessToken;
-                        }
-                        return Task.CompletedTask;
-                    }
-                };
-            });
-            
-        services.AddAuthorization(options =>
-        {
-            options.AddPolicy("AdminOnly", policy => policy.RequireRole("Administrator"));
-            options.AddPolicy("UserAccess", policy => policy.RequireRole("User", "Administrator"));
-            options.AddPolicy("DeviceAccess", policy => policy.RequireRole("Device", "User", "Administrator"));
-        });
-        
-        return services;
-    }
-    
-    private static IServiceCollection AddCachingServices(this IServiceCollection services, IConfiguration configuration)
-    {
-        services.AddMemoryCache();
-        
-        var redisConnectionString = configuration.GetConnectionString("Redis");
-        if (!string.IsNullOrEmpty(redisConnectionString))
-        {
-            services.AddStackExchangeRedisCache(options =>
-            {
-                options.Configuration = redisConnectionString;
-                options.InstanceName = "NexusHome";
-            });
-        }
-        
-        return services;
-    }
-    
-    private static IServiceCollection AddMessagingServices(this IServiceCollection services, IConfiguration configuration)
-    {
-        services.Configure<MqttBrokerSettings>(configuration.GetSection("MqttBroker"));
-        services.AddSingleton<IMqttClientService, MqttClientService>();
-        
-        return services;
-    }
-    
     private static IServiceCollection AddBusinessLogicServices(this IServiceCollection services)
     {
         // Core domain services
@@ -187,7 +25,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEnergyConsumptionAnalyzer, EnergyConsumptionAnalyzer>();
         services.AddScoped<IAutomationRuleEngine, AutomationRuleEngine>();
         services.AddScoped<IPredictiveMaintenanceEngine, PredictiveMaintenanceEngine>();
-        services.AddScoped<IEnergyOptimizationEngine, EnergyOptimizationEngine>();
+        services.AddScoped<IEnergyOptimizationService, EnergyOptimizationService>(); // Fixed type
         
         // Utility services
         services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
@@ -203,6 +41,8 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<EnergyMonitoringBackgroundService>();
         services.AddHostedService<MaintenanceSchedulingService>();
         services.AddHostedService<AutomationRuleProcessorService>();
+        services.AddHostedService<MqttConnectionService>();
+        services.AddHostedService<EnergyOptimizationBackgroundService>(); // Added new background service
         
         return services;
     }
@@ -447,3 +287,5 @@ public record DeviceTelemetryRequest(
     string DeviceId,
     Dictionary<string, object> SensorData,
     DateTime Timestamp);
+
+    public partial class Program { }
