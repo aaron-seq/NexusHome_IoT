@@ -1,4 +1,5 @@
 using NexusHome.IoT.Core.Domain;
+using System.Text.Json;
 
 namespace NexusHome.IoT.Infrastructure.Data;
 
@@ -8,19 +9,16 @@ public static class DatabaseSeeder
     {
         try
         {
-            // Seed demo devices if none exist
             if (!context.SmartDevices.Any())
             {
                 await SeedDemoDevicesAsync(context, logger);
             }
 
-            // Seed automation rules if none exist
             if (!context.AutomationRules.Any())
             {
                 await SeedDemoAutomationRulesAsync(context, logger);
             }
 
-            // Seed default user if none exist
             if (!context.Users.Any())
             {
                 await SeedDefaultUserAsync(context, logger);
@@ -40,97 +38,121 @@ public static class DatabaseSeeder
     {
         var demoDevices = new[]
         {
-            new SmartDevice
+            new SmartHomeDevice
             {
-                DeviceId = "smart-thermostat-01",
-                Name = "Living Room Thermostat",
-                DeviceType = "Thermostat",
-                Location = "Living Room",
-                RoomId = 1,
-                IsOnline = true,
-                Properties = """{"temperature": 22.5, "humidity": 45, "targetTemp": 23}""",
-                Configuration = """{"minTemp": 16, "maxTemp": 30, "autoMode": true}"""
+                UniqueDeviceIdentifier = "smart-thermostat-01",
+                DeviceFriendlyName = "Living Room Thermostat",
+                DeviceType = DeviceCategory.Thermostat,
+                PhysicalLocation = "Living Room",
+                IsCurrentlyOnline = true,
+                IsActive = true,
+                ManufacturerName = "NexusHome",
+                ModelNumber = "TH-2000",
+                FirmwareVersion = "2.1.0",
+                LastCommunicationTime = DateTime.UtcNow,
+                CurrentPowerConsumption = 150
             },
-            new SmartDevice
+            new SmartHomeDevice
             {
-                DeviceId = "smart-light-01",
-                Name = "Kitchen Smart Light",
-                DeviceType = "SmartLight",
-                Location = "Kitchen",
-                RoomId = 2,
-                IsOnline = true,
-                Properties = """{"brightness": 80, "color": "#FFFFFF", "isOn": true}""",
-                Configuration = """{"dimmable": true, "colorChangeable": true, "maxBrightness": 100}"""
+                UniqueDeviceIdentifier = "smart-light-01",
+                DeviceFriendlyName = "Kitchen Smart Light",
+                DeviceType = DeviceCategory.Lighting,
+                PhysicalLocation = "Kitchen",
+                IsCurrentlyOnline = true,
+                IsActive = true,
+                ManufacturerName = "LumiTech",
+                ModelNumber = "LT-BULB-V2",
+                FirmwareVersion = "1.5.2",
+                LastCommunicationTime = DateTime.UtcNow,
+                CurrentPowerConsumption = 12
             },
-            new SmartDevice
+            new SmartHomeDevice
             {
-                DeviceId = "smart-plug-01",
-                Name = "Bedroom Smart Plug",
-                DeviceType = "SmartPlug",
-                Location = "Bedroom",
-                RoomId = 3,
-                IsOnline = true,
-                Properties = """{"isOn": false, "powerConsumption": 0}""",
-                Configuration = """{"maxPower": 2000, "scheduleEnabled": true}"""
+                UniqueDeviceIdentifier = "smart-plug-01",
+                DeviceFriendlyName = "Bedroom Smart Plug",
+                DeviceType = DeviceCategory.SmartPlug,
+                PhysicalLocation = "Bedroom",
+                IsCurrentlyOnline = true,
+                IsActive = true,
+                ManufacturerName = "PowerGuard",
+                ModelNumber = "PG-100",
+                FirmwareVersion = "1.0.4",
+                LastCommunicationTime = DateTime.UtcNow,
+                CurrentPowerConsumption = 0
             },
-            new SmartDevice
+            new SmartHomeDevice
             {
-                DeviceId = "motion-sensor-01",
-                Name = "Garage Motion Sensor",
-                DeviceType = "MotionSensor",
-                Location = "Garage",
-                RoomId = 5,
-                IsOnline = true,
-                Properties = """{"motionDetected": false, "batteryLevel": 85}""",
-                Configuration = """{"sensitivity": "medium", "timeout": 300}"""
+                UniqueDeviceIdentifier = "motion-sensor-01",
+                DeviceFriendlyName = "Garage Motion Sensor",
+                DeviceType = DeviceCategory.Sensor,
+                PhysicalLocation = "Garage",
+                IsCurrentlyOnline = true,
+                IsActive = true,
+                ManufacturerName = "SecureSense",
+                ModelNumber = "MSS-500",
+                FirmwareVersion = "3.2.1",
+                LastCommunicationTime = DateTime.UtcNow,
+                CurrentPowerConsumption = 0.5m
             },
-            new SmartDevice
+            new SmartHomeDevice
             {
-                DeviceId = "energy-monitor-01",
-                Name = "Main Power Monitor",
-                DeviceType = "EnergyMonitor",
-                Location = "Electrical Panel",
-                IsOnline = true,
-                Properties = """{"totalPower": 1250, "voltage": 240, "frequency": 50}""",
-                Configuration = """{"alertThreshold": 2000, "reportingInterval": 60}"""
+                UniqueDeviceIdentifier = "energy-monitor-01",
+                DeviceFriendlyName = "Main Power Monitor",
+                DeviceType = DeviceCategory.EnergyMeter,
+                PhysicalLocation = "Electrical Panel",
+                IsCurrentlyOnline = true,
+                IsActive = true,
+                ManufacturerName = "VoltMaster",
+                ModelNumber = "VM-3000",
+                FirmwareVersion = "4.0.0",
+                LastCommunicationTime = DateTime.UtcNow,
+                CurrentPowerConsumption = 1250
             }
         };
 
         context.SmartDevices.AddRange(demoDevices);
         logger.LogInformation("Added {Count} demo devices", demoDevices.Length);
+        
+        // Save devices first to generate IDs
+        await context.SaveChangesAsync();
 
         // Add some sample energy readings
-        var energyReadings = new List<EnergyReading>();
+        var energyReadings = new List<DeviceEnergyConsumption>();
         var random = new Random();
         var startDate = DateTime.UtcNow.AddDays(-7);
 
-        foreach (var device in demoDevices.Where(d => d.DeviceType != "MotionSensor"))
+        foreach (var device in demoDevices.Where(d => d.DeviceType != DeviceCategory.Sensor))
         {
             for (int i = 0; i < 168; i++) // 7 days * 24 hours
             {
                 var timestamp = startDate.AddHours(i);
                 var basePower = device.DeviceType switch
                 {
-                    "Thermostat" => 150,
-                    "SmartLight" => 12,
-                    "SmartPlug" => 50,
-                    "EnergyMonitor" => 1200,
+                    DeviceCategory.Thermostat => 150,
+                    DeviceCategory.Lighting => 12,
+                    DeviceCategory.SmartPlug => 50,
+                    DeviceCategory.EnergyMeter => 1200,
                     _ => 25
                 };
 
-                energyReadings.Add(new EnergyReading
+                var power = basePower + (decimal)(random.NextDouble() * 20 - 10);
+                if(power < 0) power = 0;
+
+                energyReadings.Add(new DeviceEnergyConsumption
                 {
-                    DeviceId = device.DeviceId,
-                    PowerConsumption = basePower + (decimal)(random.NextDouble() * 20 - 10),
-                    Voltage = 240 + (decimal)(random.NextDouble() * 10 - 5),
-                    Current = (basePower + (decimal)(random.NextDouble() * 20 - 10)) / 240,
-                    Cost = (basePower / 1000m) * 0.12m,
-                    Timestamp = timestamp
+                    SmartHomeDeviceId = device.Id,
+                    PowerConsumptionKilowattHours = power / 1000m,
+                    VoltageReading = 220 + (decimal)(random.NextDouble() * 10 - 5),
+                    CurrentReading = power / 220,
+                    FrequencyReading = 50,
+                    PowerFactorReading = 0.95m + (decimal)(random.NextDouble() * 0.04),
+                    MeasurementTimestamp = timestamp,
+                    CostEstimate = (power / 1000m) * 0.12m
                 });
             }
         }
 
-        context.EnergyReadings.AddRange(energyReadings);
+        context.EnergyConsumptions.AddRange(energyReadings);
         logger.LogInformation("Added {Count} sample energy readings", energyReadings.Count);
     }
 
@@ -138,35 +160,34 @@ public static class DatabaseSeeder
     {
         var demoRules = new[]
         {
-            new AutomationRule
+            new IntelligentAutomationRule
             {
-                Name = "Evening Lights On",
+                RuleName = "Evening Lights On",
                 Description = "Turn on lights when it gets dark",
-                TriggerCondition = """{"type": "time", "value": "sunset", "offset": 0}""",
-                Action = """{"type": "device", "devices": ["smart-light-01"], "command": "turnOn", "parameters": {"brightness": 70}}""",
-                IsActive = true
+                TriggerCondition = "Time == Sunset",
+                ActionCommand = "TurnOn Lights",
+                IsActive = true,
+                ConditionsJson = JsonSerializer.Serialize(new { type = "time", value = "sunset" }),
+                ActionsJson = JsonSerializer.Serialize(new { type = "device", command = "turnOn" }),
+                PriorityLevel = 1,
+                CreatedAt = DateTime.UtcNow
             },
-            new AutomationRule
+            new IntelligentAutomationRule
             {
-                Name = "Motion Detected Security",
-                Description = "Turn on lights when motion detected in garage",
-                TriggerCondition = """{"type": "device", "deviceId": "motion-sensor-01", "property": "motionDetected", "value": true}""",
-                Action = """{"type": "notification", "message": "Motion detected in garage", "priority": "high"}""",
-                IsActive = true
-            },
-            new AutomationRule
-            {
-                Name = "Energy Savings Night Mode",
-                Description = "Reduce power consumption at night",
-                TriggerCondition = """{"type": "time", "value": "23:00", "days": ["weekday"]}""",
-                Action = """{"type": "device", "devices": ["smart-thermostat-01"], "command": "setTemperature", "parameters": {"temperature": 18}}""",
-                IsActive = false
+                RuleName = "Motion Detected Security",
+                Description = "High priority alert",
+                TriggerCondition = "Motion == Detected",
+                ActionCommand = "Notify User",
+                IsActive = true,
+                PriorityLevel = 2,
+                ConditionsJson = JsonSerializer.Serialize(new { type = "sensor", value = "motion" }),
+                ActionsJson = JsonSerializer.Serialize(new { type = "notification", importance = "high" }),
+                CreatedAt = DateTime.UtcNow
             }
         };
 
         context.AutomationRules.AddRange(demoRules);
         logger.LogInformation("Added {Count} demo automation rules", demoRules.Length);
-
     }
 
     private static async Task SeedDefaultUserAsync(SmartHomeDbContext context, ILogger logger)

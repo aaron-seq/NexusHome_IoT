@@ -1,22 +1,23 @@
 using Microsoft.Extensions.Logging;
 using NexusHome.IoT.Core.Services.Interfaces;
 
-namespace NexusHome.IoT.Infrastructure.Services
+namespace NexusHome.IoT.Infrastructure.Services;
+
+public class UtilityPriceProvider : IUtilityPriceProvider
 {
-    public class UtilityPriceProvider : IUtilityPriceProvider
+    private readonly ILogger<UtilityPriceProvider> _logger;
+
+    public UtilityPriceProvider(ILogger<UtilityPriceProvider> logger)
     {
-        private readonly ILogger<UtilityPriceProvider> _logger;
+        _logger = logger;
+    }
 
-        public UtilityPriceProvider(ILogger<UtilityPriceProvider> logger)
-        {
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        }
-
-        public Task<decimal> GetCurrentElectricityPriceAsync()
-        {
-            _logger.LogInformation("Getting current electricity price");
-            // Placeholder
-            return Task.FromResult(0.15m);
-        }
+    public Task<decimal> GetCurrentElectricityPriceAsync()
+    {
+        // Mock price
+        // Peak hours?
+        var hour = DateTime.Now.Hour;
+        decimal price = (hour >= 17 && hour <= 21) ? 0.25m : 0.12m;
+        return Task.FromResult(price);
     }
 }

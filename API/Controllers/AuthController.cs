@@ -1,7 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using NexusHome.IoT.Application.DTOs;
+using Microsoft.Extensions.Options;
+using NexusHome.IoT.Core.DTOs; // Changed from Application.DTOs
 using NexusHome.IoT.Core.Domain;
 using NexusHome.IoT.Infrastructure.Configuration;
 using NexusHome.IoT.Infrastructure.Data;
@@ -19,10 +20,10 @@ public class AuthController : ControllerBase
     private readonly JwtAuthenticationSettings _jwtSettings;
     private readonly ILogger<AuthController> _logger;
 
-    public AuthController(SmartHomeDbContext context, JwtAuthenticationSettings jwtSettings, ILogger<AuthController> logger)
+    public AuthController(SmartHomeDbContext context, IOptions<JwtAuthenticationSettings> jwtSettings, ILogger<AuthController> logger)
     {
         _context = context;
-        _jwtSettings = jwtSettings;
+        _jwtSettings = jwtSettings.Value;
         _logger = logger;
     }
 

@@ -9,8 +9,7 @@ namespace NexusHome.IoT.Infrastructure.Data
         {
         }
 
-        public DbSet<SmartHomeDevice> Devices => Set<SmartHomeDevice>();
-        public DbSet<DeviceEnergyConsumption> EnergyConsumptions => Set<DeviceEnergyConsumption>();
+
         // SolarGeneration, BatteryStatus seem missing from Core.Domain or need migration. 
         // Checking Models.cs, they exist there. We should probably migrate them or use the full names if they exist in Core.Domain.
         // Assuming for now we stick to what is in Core.Domain.Models.cs or similar.
@@ -37,6 +36,11 @@ namespace NexusHome.IoT.Infrastructure.Data
         public DbSet<DeviceAlert> DeviceAlerts => Set<DeviceAlert>();
         public DbSet<User> Users => Set<User>();
         public DbSet<WeatherData> WeatherData => Set<WeatherData>();
+        
+        public DbSet<SolarGeneration> SolarGenerations => Set<SolarGeneration>();
+        public DbSet<BatteryStatus> BatteryStatuses => Set<BatteryStatus>();
+        public DbSet<IntelligentAutomationRule> AutomationRules => Set<IntelligentAutomationRule>();
+        public DbSet<EnergyOptimizationRule> EnergyOptimizationRules => Set<EnergyOptimizationRule>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

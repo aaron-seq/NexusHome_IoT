@@ -1,22 +1,26 @@
 using Microsoft.Extensions.Logging;
 using NexusHome.IoT.Core.Services.Interfaces;
+using NexusHome.IoT.Core.Domain; // If needed for WeatherData
 
-namespace NexusHome.IoT.Infrastructure.Services
+namespace NexusHome.IoT.Infrastructure.Services;
+
+public class OpenWeatherMapProvider : IWeatherDataProvider
 {
-    public class OpenWeatherMapProvider : IWeatherDataProvider
+    private readonly ILogger<OpenWeatherMapProvider> _logger;
+
+    public OpenWeatherMapProvider(ILogger<OpenWeatherMapProvider> logger)
     {
-        private readonly ILogger<OpenWeatherMapProvider> _logger;
+        _logger = logger;
+    }
 
-        public OpenWeatherMapProvider(ILogger<OpenWeatherMapProvider> logger)
-        {
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        }
-
-        public Task<object> GetCurrentWeatherAsync(string location)
-        {
-            _logger.LogInformation("Getting current weather for {Location}", location);
-            // Placeholder
-            return Task.FromResult<object>(new { temp = 20, condition = "Sunny" });
-        }
+    public Task<object> GetCurrentWeatherAsync(string location)
+    {
+        // Mock response
+        return Task.FromResult<object>(new 
+        { 
+            Temperature = 22.5, 
+            Condition = "Cloudy", 
+            Humidity = 45 
+        });
     }
 }

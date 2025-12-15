@@ -11,6 +11,9 @@ namespace NexusHome.IoT.Core.Domain
         public string Action { get; set; } = string.Empty;
         public int? SmartHomeDeviceId { get; set; }
         
+        public bool IsEnabled { get; set; } = true;
+        public DateTime? LastExecuted { get; set; }
+        public int ExecutionCount { get; set; }
         public virtual SmartHomeDevice? SmartHomeDevice { get; set; }
     }
 }

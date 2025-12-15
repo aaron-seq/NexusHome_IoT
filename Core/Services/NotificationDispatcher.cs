@@ -1,38 +1,61 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.SignalR;
 using NexusHome.IoT.Core.Services.Interfaces;
+using NexusHome.IoT.API.Hubs;
 
-namespace NexusHome.IoT.Core.Services
+namespace NexusHome.IoT.Core.Services;
+
+public class NotificationDispatcher : INotificationDispatcher
 {
-    /// <summary>
-    /// Dispatches notifications through multiple channels (email, push, SMS, SignalR)
-    /// </summary>
-    public class NotificationDispatcher : INotificationDispatcher
+    private readonly ILogger<NotificationDispatcher> _logger;
+    private readonly IHubContext<SystemNotificationHub> _hubContext;
+
+    public NotificationDispatcher(
+        ILogger<NotificationDispatcher> logger,
+        IHubContext<SystemNotificationHub> hubContext)
     {
-        private readonly ILogger<NotificationDispatcher> _logger;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
+    }
 
-        public NotificationDispatcher(ILogger<NotificationDispatcher> logger)
+    public async Task SendNotificationAsync(string userId, string title, string message, string priority = "normal")
+    {
+        _logger.LogInformation("Sending {Priority} notification to user {UserId}: {Title}", priority, userId, title);
+        
+        try
         {
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            await _hubContext.Clients.All.SendAsync("ReceiveNotification", new 
+            {
+                Type = "Notification",
+                Title = title, 
+                Message = message, 
+                Priority = priority,
+                Timestamp = DateTime.UtcNow 
+            });
         }
-
-        public Task SendNotificationAsync(string userId, string title, string message, string priority = "normal")
+        catch (Exception ex)
         {
-            _logger.LogInformation("Sending {Priority} notification to user {UserId}: {Title}", 
-                priority, userId, title);
-            
-            // Placeholder: Implement notification sending logic
-            // Could integrate with: SendGrid, Twilio, Firebase Cloud Messaging, SignalR
-            
-            return Task.CompletedTask;
+            _logger.LogError(ex, "Error sending signalr notification");
         }
+    }
 
-        public Task SendAlertAsync(string userId, string alertType, string message)
+    public async Task SendAlertAsync(string userId, string alertType, string message)
+    {
+        _logger.LogWarning("Sending alert {AlertType} to user {UserId}", alertType, userId);
+        
+        try
         {
-            _logger.LogWarning("Sending alert of type {AlertType} to user {UserId}: {Message}", 
-                alertType, userId, message);
-            
-            // Placeholder: High-priority alert logic
-            return Task.CompletedTask;
+             await _hubContext.Clients.All.SendAsync("ReceiveAlert", new 
+            { 
+                Type = "Alert",
+                AlertType = alertType,
+                Message = message,
+                Timestamp = DateTime.UtcNow
+            });
+        }
+        catch (Exception ex)
+        {
+             _logger.LogError(ex, "Error sending signalr alert");
         }
     }
 }

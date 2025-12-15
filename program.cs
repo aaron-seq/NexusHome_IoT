@@ -82,7 +82,9 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddScoped<ISmartDeviceManager, SmartDeviceManager>();
 builder.Services.AddScoped<IEnergyConsumptionAnalyzer, EnergyConsumptionAnalyzer>();
 builder.Services.AddScoped<IAutomationRuleEngine, AutomationRuleEngine>();
-builder.Services.AddScoped<IPredictiveMaintenanceEngine, PredictiveMaintenanceEngine>();
+builder.Services.AddScoped<IPredictiveMaintenanceService, PredictiveMaintenanceService>();
+builder.Services.AddScoped<IEnergyOptimizationService, EnergyOptimizationService>();
+builder.Services.AddScoped<IMatterService, MatterService>();
 builder.Services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
 builder.Services.AddScoped<IDataAggregationService, DataAggregationService>();
 builder.Services.AddScoped<ISecurityManager, SecurityManager>();
@@ -98,6 +100,7 @@ builder.Services.AddHostedService<EnergyMonitoringBackgroundService>();
 builder.Services.AddHostedService<MaintenanceSchedulingService>();
 builder.Services.AddHostedService<AutomationRuleProcessorService>();
 builder.Services.AddHostedService<EnergyOptimizationBackgroundService>();
+builder.Services.AddHostedService<PredictiveMaintenanceBackgroundService>();
 builder.Services.AddHostedService<MqttConnectionService>();
 
 var app = builder.Build();
