@@ -1,41 +1,98 @@
-name: CI
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, fix/**, feature/** ]
+    branches: [ main, develop, 'fix/**', 'feat/**' ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  DOCKER_IMAGE: nexushome-iot
 
 jobs:
-  build-test-docker:
+  build-and-test:
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Restore
-        run: dotnet restore
+    - name: Cache NuGet packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
 
-      - name: Build
-        run: dotnet build --configuration Release --no-restore
+    - name: Restore dependencies
+      run: dotnet restore
 
-      - name: Test
-        run: dotnet test --configuration Release --no-build --collect:"XPlat Code Coverage"
+    - name: Check code formatting
+      run: dotnet format --verify-no-changes --verbosity diagnostic
 
-      - name: Upload Test Results (if any)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: |
-            **/TestResults/**/*.trx
-            **/coverage.cobertura.xml
+    - name: Build
+      run: dotnet build --configuration Release --no-restore
 
-      - name: Build Docker image
-        run: |
-          docker build -t nexushome-iot:ci --target final-runtime .
+    - name: Run tests
+      run: dotnet test --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./coverage
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        directory: ./coverage
+        fail_ci_if_error: false
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        push: false
+        tags: ${{ env.DOCKER_IMAGE }}:ci
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Test Docker image
+      run: |
+        docker run --rm ${{ env.DOCKER_IMAGE }}:ci dotnet --version
+
+  security-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
