@@ -1,0 +1,33 @@
+# Docker Compose Override for Local Development
+# This file is automatically merged with docker-compose.yml
+# Used for local development settings
+
+version: '3.8'
+
+services:
+  nexushome-app:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    volumes:
+      # Mount local directories for development
+      - ./logs:/application-runtime/logs
+      - ./data:/application-runtime/data
+    ports:
+      # Expose additional ports for debugging
+      - "5000:8080"
+
+  sqlserver:
+    ports:
+      # Expose SQL Server port for local DB tools
+      - "1433:1433"
+
+  redis:
+    ports:
+      # Expose Redis port for local debugging
+      - "6379:6379"
+
+  mqtt-broker:
+    ports:
+      # Expose MQTT ports for local testing
+      - "1883:1883"
+      - "9001:9001"
