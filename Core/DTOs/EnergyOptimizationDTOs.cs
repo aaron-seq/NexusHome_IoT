@@ -132,6 +132,13 @@ public class DemandResponseEvent
     public DateTime StartTime { get; set; }
     public DateTime EndTime { get; set; }
     public decimal TargetReduction { get; set; }
+
+    // Backward-compatible computed property
+    public TimeSpan Duration 
+    { 
+        get => EndTime - StartTime;
+        set => EndTime = StartTime + value;
+    }
 }
 
 public enum DemandResponseEventType

@@ -567,9 +567,9 @@ public class SmartDevicesControllerIntegrationTests : IClassFixture<SmartDeviceW
         await _databaseContext.SaveChangesAsync();
     }
 
-    private async Task<SmartDevice> SeedSingleTestDevice()
+    private async Task<SmartHomeDevice> SeedSingleTestDevice()
     {
-        var testDevice = new SmartDevice
+        var testDevice = new SmartHomeDevice
         {
             UniqueDeviceIdentifier = $"test-device-{Guid.NewGuid():N}"[..25],
             DeviceFriendlyName = "Test Smart Light",
@@ -596,9 +596,9 @@ public class SmartDevicesControllerIntegrationTests : IClassFixture<SmartDeviceW
 
     private async Task SeedMultipleTestDevices()
     {
-        var testDevices = new List<SmartDevice>
+        var testDevices = new List<SmartHomeDevice>
         {
-            new SmartDevice
+            new SmartHomeDevice
             {
                 UniqueDeviceIdentifier = $"test-light-{Guid.NewGuid():N}"[..20],
                 DeviceFriendlyName = "Test Smart Bulb 1",
@@ -613,7 +613,7 @@ public class SmartDevicesControllerIntegrationTests : IClassFixture<SmartDeviceW
                 UpdatedAt = DateTime.UtcNow,
                 LastCommunicationTime = DateTime.UtcNow.AddMinutes(-2)
             },
-            new SmartDevice
+            new SmartHomeDevice
             {
                 UniqueDeviceIdentifier = $"test-thermostat-{Guid.NewGuid():N}"[..25],
                 DeviceFriendlyName = "Test Smart Thermostat",
@@ -628,7 +628,7 @@ public class SmartDevicesControllerIntegrationTests : IClassFixture<SmartDeviceW
                 UpdatedAt = DateTime.UtcNow,
                 LastCommunicationTime = DateTime.UtcNow.AddMinutes(-1)
             },
-            new SmartDevice
+            new SmartHomeDevice
             {
                 UniqueDeviceIdentifier = $"test-camera-{Guid.NewGuid():N}"[..20],
                 DeviceFriendlyName = "Test Security Camera",

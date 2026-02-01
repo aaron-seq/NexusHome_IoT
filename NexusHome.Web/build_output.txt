@@ -1,0 +1,13 @@
+﻿  Determining projects to restore...
+  All projects are up-to-date for restore.
+C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\Services\SignalRService.cs(16,34): warning CS0067: The event 'SignalRService.OnNotificationReceived' is never used [C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\NexusHome.Web.csproj]
+  NexusHome.Web -> C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\bin\Debug\net8.0\NexusHome.Web.dll
+  NexusHome.Web (Blazor output) -> C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\bin\Debug\net8.0\wwwroot
+
+Build succeeded.
+
+C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\Services\SignalRService.cs(16,34): warning CS0067: The event 'SignalRService.OnNotificationReceived' is never used [C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\NexusHome.Web.csproj]
+    1 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:04.92

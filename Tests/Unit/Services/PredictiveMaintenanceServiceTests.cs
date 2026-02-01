@@ -249,9 +249,9 @@ public class PredictiveMaintenanceServiceTests : IDisposable
             _mockConfiguration.Object);
     }
 
-    private async Task<SmartDevice> SeedTestDevice()
+    private async Task<SmartHomeDevice> SeedTestDevice()
     {
-        var device = new SmartDevice
+        var device = new SmartHomeDevice
         {
             UniqueDeviceIdentifier = $"test-device-{Guid.NewGuid():N}"[..20],
             DeviceFriendlyName = "Test Smart Thermostat",

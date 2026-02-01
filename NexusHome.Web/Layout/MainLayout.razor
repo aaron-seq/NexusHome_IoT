@@ -1,0 +1,40 @@
+﻿@inherits LayoutComponentBase
+
+<div class="app-container">
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <span style="font-size: 1.75rem;">🏠</span>
+            <h1>NexusHome</h1>
+        </div>
+        
+        <NavMenu />
+        
+        <div style="margin-top: auto; padding-top: var(--spacing-lg); border-top: 1px solid var(--color-border);">
+            <button class="theme-toggle" @onclick="ToggleTheme">
+                <span>@(isDarkMode ? "☀️" : "🌙")</span>
+                <span>@(isDarkMode ? "Light Mode" : "Dark Mode")</span>
+            </button>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        @Body
+    </main>
+</div>
+
+@code {
+    private bool isDarkMode = true;
+
+    protected override void OnInitialized()
+    {
+        // Default to dark mode
+        isDarkMode = true;
+    }
+
+    private async Task ToggleTheme()
+    {
+        isDarkMode = !isDarkMode;
+        // Theme would be applied via JS interop in a full implementation
+        await Task.CompletedTask;
+    }
+}

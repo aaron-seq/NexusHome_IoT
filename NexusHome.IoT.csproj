@@ -45,6 +45,9 @@
     <!-- Debugging and Analysis -->
     <DebugType>portable</DebugType>
     <DebugSymbols>true</DebugSymbols>
+    
+    <!-- Exclude folders that should be separate projects -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);NexusHome.DeviceSimulator\**;NexusHome.WebApp\**;NexusHome.Web\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -247,31 +250,31 @@
 
   <ItemGroup>
     <!-- Docker Files -->
-    <Content Include="Dockerfile">
+    <Content Update="Dockerfile">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="docker-compose.yml">
+    <Content Update="docker-compose.yml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="docker-compose.override.yml">
+    <Content Update="docker-compose.override.yml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="docker-compose.prod.yml">
+    <Content Update="docker-compose.prod.yml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     
     <!-- Platform-specific deployment files -->
-    <Content Include="render.yaml">
+    <Content Update="render.yaml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="railway.json">
+    <Content Update="railway.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     
-    <!-- Documentation -->
-    <Content Include="README.md" />
-    <Content Include="CHANGELOG.md" />
-    <Content Include="LICENSE" />
+    <!-- Documentation - these don't need to be copied -->
+    <None Update="README.md" />
+    <None Update="CHANGELOG.md" />
+    <None Update="LICENSE" />
   </ItemGroup>
 
   <!-- Build Events -->

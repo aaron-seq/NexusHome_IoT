@@ -6,6 +6,7 @@ using NexusHome.IoT.Core.Services.Interfaces;
 using NexusHome.IoT.Infrastructure.Configuration;
 using NexusHome.IoT.Infrastructure.Data;
 using NexusHome.IoT.Infrastructure.Services;
+using NexusHome.IoT.Infrastructure.Adapters;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -14,6 +15,21 @@ using Microsoft.OpenApi.Models;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+
+// CORS for Blazor WebAssembly frontend
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("BlazorClient", policy =>
+        policy.WithOrigins(
+            "https://localhost:5001",
+            "http://localhost:5000",
+            "https://localhost:7001",
+            "http://localhost:5179"
+        )
+        .AllowAnyMethod()
+        .AllowAnyHeader()
+        .AllowCredentials());
+});
 
 // Configuration
 builder.Services.Configure<JwtAuthenticationSettings>(builder.Configuration.GetSection("JwtAuthentication"));
@@ -94,6 +110,11 @@ builder.Services.AddSingleton<IMqttClientService, EnhancedMqttClientService>();
 builder.Services.AddScoped<IWeatherDataProvider, OpenWeatherMapProvider>();
 builder.Services.AddScoped<IUtilityPriceProvider, UtilityPriceProvider>();
 
+// Device Adapters and Protocol Bridge
+builder.Services.AddScoped<IProtocolBridge, UnifiedProtocolBridge>();
+builder.Services.AddScoped<MatterDeviceAdapter>();
+builder.Services.AddScoped<MqttDeviceAdapter>();
+
 // Background Services
 builder.Services.AddHostedService<DeviceDataCollectionService>();
 builder.Services.AddHostedService<EnergyMonitoringBackgroundService>();
@@ -118,6 +139,8 @@ app.UseMiddleware<ErrorHandlingMiddleware>();
 
 app.UseHttpsRedirection();
 
+app.UseCors("BlazorClient");
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -127,3 +150,6 @@ app.MapHub<EnergyMonitoringHub>("/hubs/energy");
 app.MapHub<SystemNotificationHub>("/hubs/notifications");
 
 app.Run();
+
+// Required for WebApplicationFactory integration testing
+public partial class Program { }
