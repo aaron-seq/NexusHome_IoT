@@ -1,3 +1,5 @@
+using NexusHome.IoT.Core.Domain;
+
 namespace NexusHome.IoT.DTOs
 {
     // DTO Models for API responses
@@ -7,10 +9,10 @@ namespace NexusHome.IoT.DTOs
         public string DeviceId { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string? Description { get; set; }
-        public DeviceType Type { get; set; }
+        public DeviceCategory Type { get; set; }
         public string Manufacturer { get; set; } = string.Empty;
         public string Model { get; set; } = string.Empty;
-        public DeviceStatus Status { get; set; }
+        public DeviceOperationalStatus Status { get; set; }
         public string? Location { get; set; }
         public string? Room { get; set; }
         public decimal PowerRating { get; set; }
@@ -27,7 +29,7 @@ namespace NexusHome.IoT.DTOs
         public decimal PowerConsumption { get; set; }
         public decimal Cost { get; set; }
         public DateTime Timestamp { get; set; }
-        public EnergySource Source { get; set; }
+        public EnergySourceType Source { get; set; }
     }
 
     public class EnergyDashboardDto
@@ -45,7 +47,7 @@ namespace NexusHome.IoT.DTOs
     public class DeviceConsumptionDto
     {
         public string DeviceName { get; set; } = string.Empty;
-        public DeviceType Type { get; set; }
+        public DeviceCategory Type { get; set; }
         public decimal PowerConsumption { get; set; }
         public decimal Cost { get; set; }
         public decimal Percentage { get; set; }
@@ -57,3 +59,4 @@ namespace NexusHome.IoT.DTOs
         public Dictionary<string, object> Parameters { get; set; } = new();
     }
 }
+

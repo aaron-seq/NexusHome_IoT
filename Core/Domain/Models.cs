@@ -102,6 +102,28 @@ public class SmartHomeDevice : AuditableEntity
     public virtual ICollection<IntelligentAutomationRule> AssociatedAutomationRules { get; set; } = new List<IntelligentAutomationRule>();
     
     public virtual ICollection<DeviceTelemetryReading> TelemetryReadings { get; set; } = new List<DeviceTelemetryReading>();
+
+    // Backward-compatible alias properties
+    [NotMapped]
+    public string FirmwareVersion 
+    { 
+        get => FirmwareVersionNumber; 
+        set => FirmwareVersionNumber = value; 
+    }
+
+    [NotMapped]
+    public string CommunicationProtocol 
+    { 
+        get => ConnectionProtocol.ToString(); 
+        set => ConnectionProtocol = Enum.TryParse<CommunicationProtocol>(value, out var result) ? result : Domain.CommunicationProtocol.WiFiConnection; 
+    }
+
+    [NotMapped]
+    public decimal MaximumPowerRatingWatts 
+    { 
+        get => MaximumPowerRating; 
+        set => MaximumPowerRating = value; 
+    }
 }
 
 public enum DeviceCategory
@@ -130,7 +152,14 @@ public enum DeviceCategory
     HeatPumpSystem,
     ElectricityMeterDevice,
     WeatherMonitoringStation,
-    GenericIotDevice
+    GenericIotDevice,
+    // Backward-compatible aliases
+    Thermostat = ClimateControl,
+    Lighting = LightingSystem,
+    SmartPlug = SmartOutlet,
+    Sensor = MotionDetector,
+    EnergyMeter = ElectricityMeterDevice,
+    Security = SecurityCameraSystem
 }
 
 public enum CommunicationProtocol
@@ -157,7 +186,10 @@ public enum DeviceOperationalStatus
     ErrorState,
     OfflineDisconnected,
     StandbyMode,
-    ConfigurationMode
+    ConfigurationMode,
+    // Backward-compatible aliases
+    Normal = ActiveAndRunning,
+    Offline = OfflineDisconnected
 }
 
 public enum DeviceSecurityStatus
@@ -205,6 +237,21 @@ public class DeviceEnergyConsumption : BaseEntity
     
     // Navigation Properties
     public virtual SmartHomeDevice SmartHomeDevice { get; set; } = null!;
+
+    // Backward-compatible alias properties
+    [NotMapped]
+    public decimal CostEstimate 
+    { 
+        get => CalculatedCostAmount; 
+        set => CalculatedCostAmount = value; 
+    }
+
+    [NotMapped]
+    public SmartHomeDevice Device 
+    { 
+        get => SmartHomeDevice; 
+        set => SmartHomeDevice = value; 
+    }
 }
 
 public enum EnergySourceType

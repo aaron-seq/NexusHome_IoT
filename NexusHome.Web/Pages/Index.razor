@@ -1,0 +1,267 @@
+@page "/"
+@using NexusHome.Web.Services
+@inject ApiService Api
+@inject SignalRService SignalR
+
+<div class="fade-in">
+    <header class="page-header">
+        <div>
+            <h1 class="page-title">Dashboard</h1>
+            <p class="page-subtitle">Welcome back! Here's your smart home overview.</p>
+        </div>
+        <button class="btn btn-primary" @onclick="RefreshData">
+            🔄 Refresh
+        </button>
+    </header>
+
+    <!-- Stats Grid -->
+    <section class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value">@deviceCount</div>
+            <div class="stat-label">Total Devices</div>
+            <span class="stat-change positive">
+                @onlineCount online
+            </span>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-value">@totalPower.ToString("F1") kW</div>
+            <div class="stat-label">Current Power Usage</div>
+            <span class="stat-change @(powerChange >= 0 ? "negative" : "positive")">
+                @(powerChange >= 0 ? "↑" : "↓") @Math.Abs(powerChange).ToString("F1")% vs yesterday
+            </span>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-value">$@todayCost.ToString("F2")</div>
+            <div class="stat-label">Today's Energy Cost</div>
+            <span class="stat-change positive">
+                $@savings.ToString("F2") saved
+            </span>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-value">@activeRules</div>
+            <div class="stat-label">Active Automations</div>
+            <span class="stat-change positive">
+                @executionsToday executed today
+            </span>
+        </div>
+    </section>
+
+    <!-- Main Content Grid -->
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: var(--spacing-lg);">
+        <!-- Devices Overview -->
+        <section class="card">
+            <div class="card-header">
+                <h3 class="card-title">Devices Overview</h3>
+                <a href="devices" class="btn btn-secondary">View All →</a>
+            </div>
+            
+            @if (isLoading)
+            {
+                <div class="device-grid">
+                    @for (int i = 0; i < 4; i++)
+                    {
+                        <div class="skeleton skeleton-card"></div>
+                    }
+                </div>
+            }
+            else if (recentDevices.Any())
+            {
+                <div class="device-grid">
+                    @foreach (var device in recentDevices.Take(4))
+                    {
+                        <div class="device-card" @onclick="() => NavigateToDevice(device.DeviceId)">
+                            <div class="device-header">
+                                <div>
+                                    <div class="device-name">@device.Name</div>
+                                    <div class="device-location">@(device.Room ?? device.Location ?? "Unknown")</div>
+                                </div>
+                                <span class="status-indicator @(device.IsOnline ? "online" : "offline")">
+                                    @(device.IsOnline ? "Online" : "Offline")
+                                </span>
+                            </div>
+                            <div class="device-stats">
+                                <div class="device-stat">
+                                    <div class="device-stat-value">@device.CurrentPowerConsumption.ToString("F0")W</div>
+                                    <div class="device-stat-label">Power</div>
+                                </div>
+                                <div class="device-stat">
+                                    <div class="device-stat-value">@GetDeviceIcon(device.Type)</div>
+                                    <div class="device-stat-label">@device.Type</div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <p style="color: var(--color-text-muted); text-align: center; padding: var(--spacing-xl);">
+                    No devices configured. Add your first device to get started!
+                </p>
+            }
+        </section>
+
+        <!-- Quick Actions & Recent Activity -->
+        <div style="display: flex; flex-direction: column; gap: var(--spacing-lg);">
+            <!-- Quick Actions -->
+            <section class="card">
+                <h3 class="card-title" style="margin-bottom: var(--spacing-md);">Quick Actions</h3>
+                <div style="display: flex; flex-direction: column; gap: var(--spacing-sm);">
+                    <button class="btn btn-secondary" style="justify-content: flex-start;">
+                        💡 Turn Off All Lights
+                    </button>
+                    <button class="btn btn-secondary" style="justify-content: flex-start;">
+                        🔒 Arm Security System
+                    </button>
+                    <button class="btn btn-secondary" style="justify-content: flex-start;">
+                        🌡️ Set Away Mode
+                    </button>
+                    <button class="btn btn-secondary" style="justify-content: flex-start;">
+                        ⚡ Enable Power Saving
+                    </button>
+                </div>
+            </section>
+
+            <!-- Connection Status -->
+            <section class="card">
+                <h3 class="card-title" style="margin-bottom: var(--spacing-md);">System Status</h3>
+                <div style="display: flex; flex-direction: column; gap: var(--spacing-sm);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>API Connection</span>
+                        <span class="status-indicator online">Connected</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Real-time Updates</span>
+                        <span class="status-indicator @(SignalR.IsConnected ? "online" : "offline")">
+                            @(SignalR.IsConnected ? "Active" : "Inactive")
+                        </span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>MQTT Broker</span>
+                        <span class="status-indicator online">Connected</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool isLoading = true;
+    private List<DeviceDto> recentDevices = new();
+    
+    // Stats
+    private int deviceCount = 0;
+    private int onlineCount = 0;
+    private decimal totalPower = 0;
+    private decimal powerChange = -5.2m;
+    private decimal todayCost = 0;
+    private decimal savings = 0;
+    private int activeRules = 0;
+    private int executionsToday = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardData();
+        await ConnectToSignalR();
+    }
+
+    private async Task LoadDashboardData()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            // Load devices
+            var devices = await Api.GetDevicesAsync();
+            if (devices != null)
+            {
+                recentDevices = devices.OrderByDescending(d => d.LastSeen).Take(8).ToList();
+                deviceCount = devices.Count;
+                onlineCount = devices.Count(d => d.IsOnline);
+                totalPower = devices.Sum(d => d.CurrentPowerConsumption) / 1000m; // Convert to kW
+            }
+
+            // Load energy data
+            var energy = await Api.GetEnergyDashboardAsync();
+            if (energy != null)
+            {
+                todayCost = energy.TotalCost;
+                savings = energy.CostSavings;
+            }
+
+            // Load automation rules
+            var rules = await Api.GetAutomationRulesAsync();
+            if (rules != null)
+            {
+                activeRules = rules.Count(r => r.IsEnabled);
+                executionsToday = rules.Sum(r => r.ExecutionCount);
+            }
+        }
+        catch (Exception)
+        {
+            // Use demo data on error
+            deviceCount = 12;
+            onlineCount = 10;
+            totalPower = 3.2m;
+            todayCost = 4.50m;
+            savings = 1.20m;
+            activeRules = 5;
+            executionsToday = 23;
+        }
+
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task ConnectToSignalR()
+    {
+        try
+        {
+            await SignalR.ConnectAsync();
+            SignalR.OnDeviceStatusChanged += HandleDeviceStatusChange;
+        }
+        catch (Exception)
+        {
+            // Continue without real-time updates
+        }
+    }
+
+    private void HandleDeviceStatusChange(string deviceId, string status)
+    {
+        var device = recentDevices.FirstOrDefault(d => d.DeviceId == deviceId);
+        if (device != null)
+        {
+            device.Status = status;
+            device.IsOnline = status.ToLower() != "offline";
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        await LoadDashboardData();
+    }
+
+    private void NavigateToDevice(string deviceId)
+    {
+        // Navigation handled by NavManager in full implementation
+    }
+
+    private string GetDeviceIcon(string type) => type.ToLower() switch
+    {
+        "climatecontrol" or "thermostat" => "🌡️",
+        "lightingsystem" or "lighting" => "💡",
+        "smartoutlet" or "smartplug" => "🔌",
+        "securitycamerasystem" or "security" => "📷",
+        "smartlocksystem" => "🔒",
+        "motiondetector" or "sensor" => "📡",
+        "voiceassistantdevice" => "🔊",
+        "energymonitoring" or "energymeter" => "⚡",
+        _ => "📱"
+    };
+}

@@ -1,0 +1,239 @@
+@page "/automation"
+@using NexusHome.Web.Services
+@inject ApiService Api
+
+<div class="fade-in">
+    <header class="page-header">
+        <div>
+            <h1 class="page-title">Automation Rules</h1>
+            <p class="page-subtitle">Create and manage smart home automation routines</p>
+        </div>
+        <button class="btn btn-primary" @onclick="ShowCreateDialog">
+            ➕ Create Rule
+        </button>
+    </header>
+
+    <!-- Quick Stats -->
+    <section class="stats-grid" style="grid-template-columns: repeat(4, 1fr);">
+        <div class="stat-card">
+            <div class="stat-value">@totalRules</div>
+            <div class="stat-label">Total Rules</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">@activeRules</div>
+            <div class="stat-label">Active Rules</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">@executionsToday</div>
+            <div class="stat-label">Executions Today</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">@savingsFromAutomation.ToString("F0")%</div>
+            <div class="stat-label">Energy Saved</div>
+        </div>
+    </section>
+
+    <!-- Rules List -->
+    @if (isLoading)
+    {
+        <div style="display: flex; flex-direction: column; gap: var(--spacing-md);">
+            @for (int i = 0; i < 4; i++)
+            {
+                <div class="skeleton" style="height: 120px;"></div>
+            }
+        </div>
+    }
+    else if (!rules.Any())
+    {
+        <div class="card" style="text-align: center; padding: var(--spacing-2xl);">
+            <div style="font-size: 4rem; margin-bottom: var(--spacing-lg);">🤖</div>
+            <h3>No automation rules yet</h3>
+            <p style="color: var(--color-text-muted); margin-bottom: var(--spacing-lg);">
+                Create your first rule to automate your smart home devices.
+            </p>
+            <button class="btn btn-primary" @onclick="ShowCreateDialog">➕ Create Your First Rule</button>
+        </div>
+    }
+    else
+    {
+        <div style="display: flex; flex-direction: column; gap: var(--spacing-md);">
+            @foreach (var rule in rules)
+            {
+                <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="flex: 1;">
+                        <div style="display: flex; align-items: center; gap: var(--spacing-md); margin-bottom: var(--spacing-sm);">
+                            <span style="font-size: 1.5rem;">@GetRuleIcon(rule.TriggerCondition)</span>
+                            <div>
+                                <h4 style="margin: 0;">@rule.Name</h4>
+                                <p style="font-size: var(--font-size-sm); color: var(--color-text-muted); margin: 0;">
+                                    @(rule.Description ?? "No description")
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: var(--spacing-lg); margin-top: var(--spacing-md); padding-top: var(--spacing-md); border-top: 1px solid var(--color-border);">
+                            <div>
+                                <span style="font-size: var(--font-size-xs); color: var(--color-text-muted);">TRIGGER</span>
+                                <p style="font-size: var(--font-size-sm); margin: 0;">@FormatTrigger(rule.TriggerCondition)</p>
+                            </div>
+                            <div>
+                                <span style="font-size: var(--font-size-xs); color: var(--color-text-muted);">ACTION</span>
+                                <p style="font-size: var(--font-size-sm); margin: 0;">@FormatAction(rule.Action)</p>
+                            </div>
+                            <div>
+                                <span style="font-size: var(--font-size-xs); color: var(--color-text-muted);">LAST RUN</span>
+                                <p style="font-size: var(--font-size-sm); margin: 0;">
+                                    @(rule.LastExecuted.HasValue ? FormatLastRun(rule.LastExecuted.Value) : "Never")
+                                </p>
+                            </div>
+                            <div>
+                                <span style="font-size: var(--font-size-xs); color: var(--color-text-muted);">EXECUTIONS</span>
+                                <p style="font-size: var(--font-size-sm); margin: 0;">@rule.ExecutionCount times</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; align-items: center; gap: var(--spacing-lg);">
+                        <label class="toggle-switch">
+                            <input type="checkbox" checked="@rule.IsEnabled" 
+                                   @onchange="() => ToggleRule(rule)" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <button class="btn btn-icon btn-secondary" title="Edit">✏️</button>
+                        <button class="btn btn-icon btn-secondary" @onclick="() => DeleteRule(rule)" title="Delete">🗑️</button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Suggested Automations -->
+    <section class="card" style="margin-top: var(--spacing-xl);">
+        <h3 class="card-title" style="margin-bottom: var(--spacing-lg);">Suggested Automations</h3>
+        
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--spacing-lg);">
+            <div style="padding: var(--spacing-lg); background: var(--color-bg-elevated); border-radius: var(--radius-md); border: 1px solid var(--color-border);">
+                <div style="font-size: 2rem; margin-bottom: var(--spacing-sm);">🌅</div>
+                <h4 style="margin-bottom: var(--spacing-xs);">Good Morning</h4>
+                <p style="font-size: var(--font-size-sm); color: var(--color-text-muted); margin-bottom: var(--spacing-md);">
+                    Gradually turn on lights and adjust thermostat at sunrise
+                </p>
+                <button class="btn btn-secondary" style="width: 100%;">Add This Rule</button>
+            </div>
+            
+            <div style="padding: var(--spacing-lg); background: var(--color-bg-elevated); border-radius: var(--radius-md); border: 1px solid var(--color-border);">
+                <div style="font-size: 2rem; margin-bottom: var(--spacing-sm);">🚗</div>
+                <h4 style="margin-bottom: var(--spacing-xs);">Away Mode</h4>
+                <p style="font-size: var(--font-size-sm); color: var(--color-text-muted); margin-bottom: var(--spacing-md);">
+                    Turn off lights and lower heating when everyone leaves
+                </p>
+                <button class="btn btn-secondary" style="width: 100%;">Add This Rule</button>
+            </div>
+            
+            <div style="padding: var(--spacing-lg); background: var(--color-bg-elevated); border-radius: var(--radius-md); border: 1px solid var(--color-border);">
+                <div style="font-size: 2rem; margin-bottom: var(--spacing-sm);">💤</div>
+                <h4 style="margin-bottom: var(--spacing-xs);">Good Night</h4>
+                <p style="font-size: var(--font-size-sm); color: var(--color-text-muted); margin-bottom: var(--spacing-md);">
+                    Turn off all lights, lock doors, and arm security at bedtime
+                </p>
+                <button class="btn btn-secondary" style="width: 100%;">Add This Rule</button>
+            </div>
+        </div>
+    </section>
+</div>
+
+@code {
+    private bool isLoading = true;
+    private List<AutomationRuleDto> rules = new();
+    
+    // Stats
+    private int totalRules => rules.Count;
+    private int activeRules => rules.Count(r => r.IsEnabled);
+    private int executionsToday => rules.Sum(r => r.ExecutionCount);
+    private decimal savingsFromAutomation = 15;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRules();
+    }
+
+    private async Task LoadRules()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var loadedRules = await Api.GetAutomationRulesAsync();
+            rules = loadedRules ?? GenerateDemoRules();
+        }
+        catch (Exception)
+        {
+            rules = GenerateDemoRules();
+        }
+
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private List<AutomationRuleDto> GenerateDemoRules() => new()
+    {
+        new() { Id = 1, Name = "Morning Routine", Description = "Start the day right with automated lighting and climate", TriggerCondition = "time:06:30", Action = "lights:on,thermostat:72", IsEnabled = true, LastExecuted = DateTime.Now.Date.AddHours(6.5), ExecutionCount = 45 },
+        new() { Id = 2, Name = "Night Mode", Description = "Prepare home for bedtime", TriggerCondition = "time:22:00", Action = "lights:off,locks:arm", IsEnabled = true, LastExecuted = DateTime.Now.Date.AddDays(-1).AddHours(22), ExecutionCount = 38 },
+        new() { Id = 3, Name = "Motion Lights", Description = "Turn on lights when motion detected", TriggerCondition = "motion:hallway", Action = "lights:hallway:on", IsEnabled = true, LastExecuted = DateTime.Now.AddMinutes(-15), ExecutionCount = 234 },
+        new() { Id = 4, Name = "Energy Saver", Description = "Reduce power during peak hours", TriggerCondition = "time:17:00-19:00", Action = "thermostat:+2,lights:dim", IsEnabled = false, LastExecuted = null, ExecutionCount = 0 },
+    };
+
+    private void ShowCreateDialog()
+    {
+        // Would open modal/dialog for rule creation
+    }
+
+    private async Task ToggleRule(AutomationRuleDto rule)
+    {
+        rule.IsEnabled = !rule.IsEnabled;
+        await Api.ToggleAutomationRuleAsync(rule.Id, rule.IsEnabled);
+        StateHasChanged();
+    }
+
+    private void DeleteRule(AutomationRuleDto rule)
+    {
+        rules.Remove(rule);
+        StateHasChanged();
+    }
+
+    private string GetRuleIcon(string trigger) => trigger switch
+    {
+        _ when trigger.StartsWith("time") => "⏰",
+        _ when trigger.StartsWith("motion") => "👁️",
+        _ when trigger.StartsWith("temp") => "🌡️",
+        _ when trigger.StartsWith("sunrise") => "🌅",
+        _ when trigger.StartsWith("sunset") => "🌆",
+        _ => "⚡"
+    };
+
+    private string FormatTrigger(string trigger) => trigger switch
+    {
+        _ when trigger.StartsWith("time:") => $"At {trigger.Replace("time:", "")}",
+        _ when trigger.StartsWith("motion:") => $"Motion in {trigger.Replace("motion:", "")}",
+        _ when trigger.Contains("-") => $"Between {trigger.Replace("time:", "")}",
+        _ => trigger
+    };
+
+    private string FormatAction(string action) => action switch
+    {
+        _ when action.Contains("lights:on") => "Turn on lights",
+        _ when action.Contains("lights:off") => "Turn off lights",
+        _ when action.Contains("thermostat") => "Adjust thermostat",
+        _ when action.Contains("locks") => "Lock/unlock doors",
+        _ => action
+    };
+
+    private string FormatLastRun(DateTime lastRun)
+    {
+        var diff = DateTime.Now - lastRun;
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h ago";
+        return lastRun.ToString("MMM d");
+    }
+}

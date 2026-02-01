@@ -1,0 +1,224 @@
+@page "/devices"
+@using NexusHome.Web.Services
+@inject ApiService Api
+@inject NavigationManager Navigation
+
+<div class="fade-in">
+    <header class="page-header">
+        <div>
+            <h1 class="page-title">Devices</h1>
+            <p class="page-subtitle">Manage and monitor all your smart home devices</p>
+        </div>
+        <div style="display: flex; gap: var(--spacing-md);">
+            <select class="form-select" style="width: auto;" @bind="selectedCategory">
+                <option value="">All Categories</option>
+                <option value="ClimateControl">Climate Control</option>
+                <option value="LightingSystem">Lighting</option>
+                <option value="SmartOutlet">Smart Plugs</option>
+                <option value="SecurityCameraSystem">Security</option>
+                <option value="EnergyMonitoring">Energy Meters</option>
+            </select>
+            <button class="btn btn-primary">
+                ➕ Add Device
+            </button>
+        </div>
+    </header>
+
+    <!-- Filter Bar -->
+    <div class="card" style="margin-bottom: var(--spacing-lg);">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; gap: var(--spacing-md);">
+                <button class="btn @(filter == "all" ? "btn-primary" : "btn-secondary")" 
+                        @onclick="@(() => SetFilter("all"))">
+                    All (@totalCount)
+                </button>
+                <button class="btn @(filter == "online" ? "btn-primary" : "btn-secondary")"
+                        @onclick="@(() => SetFilter("online"))">
+                    Online (@onlineCount)
+                </button>
+                <button class="btn @(filter == "offline" ? "btn-primary" : "btn-secondary")"
+                        @onclick="@(() => SetFilter("offline"))">
+                    Offline (@offlineCount)
+                </button>
+            </div>
+            <div style="display: flex; gap: var(--spacing-sm);">
+                <button class="btn btn-icon @(viewMode == "grid" ? "btn-primary" : "btn-secondary")"
+                        @onclick="@(() => viewMode = "grid")" title="Grid View">
+                    ⊞
+                </button>
+                <button class="btn btn-icon @(viewMode == "list" ? "btn-primary" : "btn-secondary")"
+                        @onclick="@(() => viewMode = "list")" title="List View">
+                    ☰
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Device Grid/List -->
+    @if (isLoading)
+    {
+        <div class="device-grid">
+            @for (int i = 0; i < 8; i++)
+            {
+                <div class="skeleton skeleton-card"></div>
+            }
+        </div>
+    }
+    else if (!filteredDevices.Any())
+    {
+        <div class="card" style="text-align: center; padding: var(--spacing-2xl);">
+            <div style="font-size: 4rem; margin-bottom: var(--spacing-lg);">📱</div>
+            <h3>No devices found</h3>
+            <p style="color: var(--color-text-muted); margin-bottom: var(--spacing-lg);">
+                @if (filter != "all")
+                {
+                    <span>No @filter devices match your criteria.</span>
+                }
+                else
+                {
+                    <span>Get started by adding your first smart device.</span>
+                }
+            </p>
+            <button class="btn btn-primary">➕ Add Device</button>
+        </div>
+    }
+    else
+    {
+        <div class="@(viewMode == "grid" ? "device-grid" : "")">
+            @foreach (var device in filteredDevices)
+            {
+                <div class="device-card" @onclick="() => ViewDevice(device.DeviceId)">
+                    <div class="device-header">
+                        <div>
+                            <div class="device-name">
+                                @GetDeviceIcon(device.Type) @device.Name
+                            </div>
+                            <div class="device-location">@(device.Room ?? device.Location ?? "Unassigned")</div>
+                        </div>
+                        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: var(--spacing-xs);">
+                            <span class="status-indicator @(device.IsOnline ? "online" : "offline")">
+                                @(device.IsOnline ? "Online" : "Offline")
+                            </span>
+                            @if (device.IsOnline)
+                            {
+                                <label class="toggle-switch" @onclick:stopPropagation="true">
+                                    <input type="checkbox" checked="@(device.Status == "ActiveAndRunning")" 
+                                           @onchange="() => ToggleDevice(device)" />
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            }
+                        </div>
+                    </div>
+                    
+                    <div class="device-stats">
+                        <div class="device-stat">
+                            <div class="device-stat-value">@device.CurrentPowerConsumption.ToString("F0")W</div>
+                            <div class="device-stat-label">Power</div>
+                        </div>
+                        <div class="device-stat">
+                            <div class="device-stat-value">@device.PowerRating.ToString("F0")W</div>
+                            <div class="device-stat-label">Max Rating</div>
+                        </div>
+                        <div class="device-stat">
+                            <div class="device-stat-value">@FormatLastSeen(device.LastSeen)</div>
+                            <div class="device-stat-label">Last Seen</div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private bool isLoading = true;
+    private List<DeviceDto> allDevices = new();
+    private string filter = "all";
+    private string selectedCategory = "";
+    private string viewMode = "grid";
+
+    private int totalCount => allDevices.Count;
+    private int onlineCount => allDevices.Count(d => d.IsOnline);
+    private int offlineCount => allDevices.Count(d => !d.IsOnline);
+
+    private IEnumerable<DeviceDto> filteredDevices => allDevices
+        .Where(d => filter == "all" || (filter == "online" && d.IsOnline) || (filter == "offline" && !d.IsOnline))
+        .Where(d => string.IsNullOrEmpty(selectedCategory) || d.Type == selectedCategory)
+        .OrderByDescending(d => d.IsOnline)
+        .ThenBy(d => d.Name);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDevices();
+    }
+
+    private async Task LoadDevices()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var devices = await Api.GetDevicesAsync();
+            allDevices = devices ?? GenerateDemoDevices();
+        }
+        catch (Exception)
+        {
+            allDevices = GenerateDemoDevices();
+        }
+
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private List<DeviceDto> GenerateDemoDevices() => new()
+    {
+        new() { DeviceId = "dev-001", Name = "Living Room Thermostat", Type = "ClimateControl", Room = "Living Room", IsOnline = true, Status = "ActiveAndRunning", CurrentPowerConsumption = 15, PowerRating = 50, LastSeen = DateTime.Now.AddMinutes(-2) },
+        new() { DeviceId = "dev-002", Name = "Kitchen Lights", Type = "LightingSystem", Room = "Kitchen", IsOnline = true, Status = "ActiveAndRunning", CurrentPowerConsumption = 45, PowerRating = 100, LastSeen = DateTime.Now.AddMinutes(-1) },
+        new() { DeviceId = "dev-003", Name = "Front Door Camera", Type = "SecurityCameraSystem", Room = "Entrance", IsOnline = true, Status = "ActiveAndRunning", CurrentPowerConsumption = 8, PowerRating = 15, LastSeen = DateTime.Now.AddSeconds(-30) },
+        new() { DeviceId = "dev-004", Name = "Bedroom Smart Plug", Type = "SmartOutlet", Room = "Bedroom", IsOnline = true, Status = "InactiveOrIdle", CurrentPowerConsumption = 0, PowerRating = 1500, LastSeen = DateTime.Now.AddMinutes(-5) },
+        new() { DeviceId = "dev-005", Name = "Garage Door Sensor", Type = "MotionDetector", Room = "Garage", IsOnline = false, Status = "OfflineDisconnected", CurrentPowerConsumption = 0, PowerRating = 5, LastSeen = DateTime.Now.AddHours(-2) },
+        new() { DeviceId = "dev-006", Name = "Solar Panel Meter", Type = "EnergyMonitoring", Room = "Roof", IsOnline = true, Status = "ActiveAndRunning", CurrentPowerConsumption = 2, PowerRating = 10, LastSeen = DateTime.Now.AddMinutes(-1) },
+    };
+
+    private void SetFilter(string newFilter)
+    {
+        filter = newFilter;
+    }
+
+    private void ViewDevice(string deviceId)
+    {
+        Navigation.NavigateTo($"/devices/{deviceId}");
+    }
+
+    private async Task ToggleDevice(DeviceDto device)
+    {
+        var success = await Api.ToggleDeviceAsync(device.DeviceId);
+        if (success)
+        {
+            device.Status = device.Status == "ActiveAndRunning" ? "InactiveOrIdle" : "ActiveAndRunning";
+            StateHasChanged();
+        }
+    }
+
+    private string GetDeviceIcon(string type) => type switch
+    {
+        "ClimateControl" => "🌡️",
+        "LightingSystem" => "💡",
+        "SmartOutlet" => "🔌",
+        "SecurityCameraSystem" => "📷",
+        "SmartLockSystem" => "🔒",
+        "MotionDetector" => "📡",
+        "EnergyMonitoring" => "⚡",
+        _ => "📱"
+    };
+
+    private string FormatLastSeen(DateTime lastSeen)
+    {
+        var diff = DateTime.Now - lastSeen;
+        if (diff.TotalMinutes < 1) return "Just now";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h ago";
+        return $"{(int)diff.TotalDays}d ago";
+    }
+}

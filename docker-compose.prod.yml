@@ -1,0 +1,60 @@
+# Docker Compose Production Configuration
+# NexusHome IoT Platform
+
+version: "3.8"
+
+services:
+  nexushome-api:
+    image: nexushome/iot-platform:latest
+    container_name: nexushome-api
+    ports:
+      - "5000:80"
+      - "5001:443"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=${DATABASE_CONNECTION_STRING}
+      - Jwt__Secret=${JWT_SECRET}
+      - Mqtt__Host=${MQTT_HOST}
+      - Mqtt__Port=${MQTT_PORT}
+    depends_on:
+      - mqtt-broker
+      - database
+    restart: unless-stopped
+    networks:
+      - nexushome-network
+
+  mqtt-broker:
+    image: eclipse-mosquitto:2
+    container_name: nexushome-mqtt
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - mqtt-data:/mosquitto/data
+      - mqtt-log:/mosquitto/log
+    restart: unless-stopped
+    networks:
+      - nexushome-network
+
+  database:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: nexushome-db
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=${DB_SA_PASSWORD}
+    ports:
+      - "1433:1433"
+    volumes:
+      - db-data:/var/opt/mssql
+    restart: unless-stopped
+    networks:
+      - nexushome-network
+
+volumes:
+  mqtt-data:
+  mqtt-log:
+  db-data:
+
+networks:
+  nexushome-network:
+    driver: bridge

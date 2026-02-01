@@ -236,7 +236,7 @@ public static class DatabaseSeeder
         logger.LogWarning("Default credentials - Username: admin, Password: {Password}", defaultPassword);
         logger.LogWarning("CHANGE THIS PASSWORD IMMEDIATELY IN PRODUCTION!");
 
-        var passwordHash = BCrypt.HashPassword(defaultPassword, workFactor: 12);
+        var passwordHash = BCrypt.Net.BCrypt.HashPassword(defaultPassword, workFactor: 12);
 
         var adminUser = new User
         {

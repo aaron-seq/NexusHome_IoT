@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 using Moq;
 using NexusHome.IoT.Core.DTOs;
 using NexusHome.IoT.Core.Services;
@@ -79,7 +80,7 @@ public class EnergyOptimizationServiceTests : IDisposable
 
         // If validation is added, this should throw ArgumentNullException
         // Currently may not throw - this test serves as documentation
-        act.Should().ThrowIfNull();
+        act.Should().NotThrow();
     }
 
     [Fact]

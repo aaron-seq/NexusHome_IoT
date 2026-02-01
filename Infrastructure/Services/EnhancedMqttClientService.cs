@@ -179,14 +179,14 @@ public class EnhancedMqttClientService : IMqttClientService, IDisposable
 
         try
         {
-            var mqttMessage = new ManagedMqttApplicationMessageBuilder()
+            var innerMessage = new MqttApplicationMessageBuilder()
                 .WithTopic(topicName)
                 .WithPayload(Encoding.UTF8.GetBytes(messagePayload))
                 .WithQualityOfServiceLevel((MQTTnet.Protocol.MqttQualityOfServiceLevel)qualityOfService)
                 .WithRetainFlag(retainMessage)
                 .Build();
 
-            await _managedMqttClient.EnqueueAsync(mqttMessage);
+            await _managedMqttClient.EnqueueAsync(innerMessage);
             
             _logger.LogDebug("Published message to topic {TopicName} with QoS {QualityOfService}, payload length: {PayloadLength} bytes",
                 topicName, qualityOfService, messagePayload.Length);
@@ -226,7 +226,7 @@ public class EnhancedMqttClientService : IMqttClientService, IDisposable
                 .WithQualityOfServiceLevel((MQTTnet.Protocol.MqttQualityOfServiceLevel)qualityOfService)
                 .Build();
 
-            await _managedMqttClient.SubscribeAsync(topicFilter);
+            await _managedMqttClient.SubscribeAsync(new[] { topicFilter });
             
             _logger.LogInformation("Successfully subscribed to topic pattern {TopicPattern} with QoS {QualityOfService}",
                 topicPattern, qualityOfService);

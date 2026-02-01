@@ -1,0 +1,257 @@
+@page "/devices/{DeviceId}"
+@using NexusHome.Web.Services
+@inject ApiService Api
+@inject NavigationManager Navigation
+
+<div class="fade-in">
+    @if (isLoading)
+    {
+        <div class="skeleton skeleton-title"></div>
+        <div class="skeleton skeleton-card" style="height: 400px; margin-top: var(--spacing-lg);"></div>
+    }
+    else if (device == null)
+    {
+        <div class="card" style="text-align: center; padding: var(--spacing-2xl);">
+            <div style="font-size: 4rem; margin-bottom: var(--spacing-lg);">❓</div>
+            <h3>Device not found</h3>
+            <p style="color: var(--color-text-muted); margin-bottom: var(--spacing-lg);">
+                The device you're looking for doesn't exist or has been removed.
+            </p>
+            <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/devices")'>
+                ← Back to Devices
+            </button>
+        </div>
+    }
+    else
+    {
+        <header class="page-header">
+            <div style="display: flex; align-items: center; gap: var(--spacing-lg);">
+                <button class="btn btn-icon btn-secondary" @onclick='() => Navigation.NavigateTo("/devices")'>
+                    ←
+                </button>
+                <div>
+                    <h1 class="page-title">@GetDeviceIcon(device.Type) @device.Name</h1>
+                    <p class="page-subtitle">@(device.Room ?? device.Location ?? "Unassigned") • @device.Manufacturer @device.Model</p>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: var(--spacing-md);">
+                <span class="status-indicator @(device.IsOnline ? "online" : "offline")">
+                    @(device.IsOnline ? "Online" : "Offline")
+                </span>
+                <label class="toggle-switch">
+                    <input type="checkbox" checked="@isDeviceOn" @onchange="ToggleDevice" />
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </header>
+
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: var(--spacing-lg);">
+            <!-- Device Info & Controls -->
+            <div style="display: flex; flex-direction: column; gap: var(--spacing-lg);">
+                <!-- Quick Stats -->
+                <section class="stats-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="stat-card">
+                        <div class="stat-value">@device.CurrentPowerConsumption.ToString("F0")W</div>
+                        <div class="stat-label">Current Power</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">@device.PowerRating.ToString("F0")W</div>
+                        <div class="stat-label">Max Rating</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">@FormatLastSeen(device.LastSeen)</div>
+                        <div class="stat-label">Last Update</div>
+                    </div>
+                </section>
+
+                <!-- Power Usage Chart -->
+                <section class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Power Usage (Last 24 Hours)</h3>
+                    </div>
+                    
+                    <div style="height: 200px; display: flex; align-items: flex-end; gap: 4px; padding: var(--spacing-md);">
+                        @foreach (var point in powerHistory)
+                        {
+                            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                                <div style="width: 100%; background: var(--gradient-primary); border-radius: var(--radius-sm); height: @(point * 1.5)px; min-height: 4px;"></div>
+                            </div>
+                        }
+                    </div>
+                </section>
+
+                <!-- Device Controls -->
+                <section class="card">
+                    <h3 class="card-title" style="margin-bottom: var(--spacing-lg);">Device Controls</h3>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--spacing-md);">
+                        <button class="btn btn-secondary" style="padding: var(--spacing-lg);">
+                            <span style="font-size: 1.5rem;">🔄</span>
+                            <span>Restart Device</span>
+                        </button>
+                        <button class="btn btn-secondary" style="padding: var(--spacing-lg);">
+                            <span style="font-size: 1.5rem;">📡</span>
+                            <span>Check Connection</span>
+                        </button>
+                        <button class="btn btn-secondary" style="padding: var(--spacing-lg);">
+                            <span style="font-size: 1.5rem;">⬆️</span>
+                            <span>Update Firmware</span>
+                        </button>
+                        <button class="btn btn-secondary" style="padding: var(--spacing-lg);">
+                            <span style="font-size: 1.5rem;">⚙️</span>
+                            <span>Settings</span>
+                        </button>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Device Details & History -->
+            <div style="display: flex; flex-direction: column; gap: var(--spacing-lg);">
+                <!-- Device Information -->
+                <section class="card">
+                    <h3 class="card-title" style="margin-bottom: var(--spacing-lg);">Device Information</h3>
+                    
+                    <div style="display: flex; flex-direction: column; gap: var(--spacing-md);">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--color-text-muted);">Device ID</span>
+                            <span style="font-family: monospace;">@device.DeviceId</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--color-text-muted);">Type</span>
+                            <span>@device.Type</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--color-text-muted);">Manufacturer</span>
+                            <span>@device.Manufacturer</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--color-text-muted);">Model</span>
+                            <span>@device.Model</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--color-text-muted);">Status</span>
+                            <span>@device.Status</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Recent Activity -->
+                <section class="card">
+                    <h3 class="card-title" style="margin-bottom: var(--spacing-lg);">Recent Activity</h3>
+                    
+                    <div style="display: flex; flex-direction: column; gap: var(--spacing-sm);">
+                        @foreach (var activity in recentActivity)
+                        {
+                            <div style="display: flex; gap: var(--spacing-md); padding: var(--spacing-sm) 0; border-bottom: 1px solid var(--color-border);">
+                                <span style="color: var(--color-text-muted); font-size: var(--font-size-sm); min-width: 60px;">@activity.Time</span>
+                                <span style="font-size: var(--font-size-sm);">@activity.Action</span>
+                            </div>
+                        }
+                    </div>
+                </section>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string DeviceId { get; set; } = "";
+
+    private bool isLoading = true;
+    private DeviceDto? device;
+    private bool isDeviceOn = true;
+    private List<int> powerHistory = new();
+    private List<(string Time, string Action)> recentActivity = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDevice();
+    }
+
+    private async Task LoadDevice()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            device = await Api.GetDeviceAsync(DeviceId);
+            
+            if (device == null)
+            {
+                // Load demo device for testing
+                device = new DeviceDto
+                {
+                    DeviceId = DeviceId,
+                    Name = "Demo Device",
+                    Type = "SmartOutlet",
+                    Manufacturer = "NexusHome",
+                    Model = "NH-1000",
+                    Room = "Living Room",
+                    IsOnline = true,
+                    Status = "ActiveAndRunning",
+                    CurrentPowerConsumption = 45,
+                    PowerRating = 1500,
+                    LastSeen = DateTime.Now.AddMinutes(-5)
+                };
+            }
+
+            isDeviceOn = device.Status == "ActiveAndRunning";
+            
+            // Generate demo power history
+            var random = new Random();
+            powerHistory = Enumerable.Range(0, 24)
+                .Select(_ => random.Next(10, 100))
+                .ToList();
+
+            // Generate demo activity
+            recentActivity = new List<(string Time, string Action)>
+            {
+                ("2m ago", "Power reading: 45W"),
+                ("5m ago", "Status check: Online"),
+                ("1h ago", "Device turned on"),
+                ("3h ago", "Device turned off"),
+                ("6h ago", "Firmware check passed"),
+            };
+        }
+        catch (Exception)
+        {
+            device = null;
+        }
+
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task ToggleDevice()
+    {
+        if (device == null) return;
+        
+        isDeviceOn = !isDeviceOn;
+        device.Status = isDeviceOn ? "ActiveAndRunning" : "InactiveOrIdle";
+        await Api.ToggleDeviceAsync(device.DeviceId);
+        StateHasChanged();
+    }
+
+    private string GetDeviceIcon(string type) => type switch
+    {
+        "ClimateControl" => "🌡️",
+        "LightingSystem" => "💡",
+        "SmartOutlet" => "🔌",
+        "SecurityCameraSystem" => "📷",
+        "SmartLockSystem" => "🔒",
+        "MotionDetector" => "📡",
+        "EnergyMonitoring" => "⚡",
+        _ => "📱"
+    };
+
+    private string FormatLastSeen(DateTime lastSeen)
+    {
+        var diff = DateTime.Now - lastSeen;
+        if (diff.TotalMinutes < 1) return "Just now";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h ago";
+        return $"{(int)diff.TotalDays}d ago";
+    }
+}

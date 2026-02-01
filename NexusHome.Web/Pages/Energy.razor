@@ -1,0 +1,223 @@
+@page "/energy"
+@using NexusHome.Web.Services
+@inject ApiService Api
+
+<div class="fade-in">
+    <header class="page-header">
+        <div>
+            <h1 class="page-title">Energy Analytics</h1>
+            <p class="page-subtitle">Monitor consumption, costs, and optimize your energy usage</p>
+        </div>
+        <div style="display: flex; gap: var(--spacing-md);">
+            <select class="form-select" style="width: auto;" @bind="timeRange">
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+                <option value="year">This Year</option>
+            </select>
+            <button class="btn btn-primary" @onclick="ExportData">
+                📊 Export Report
+            </button>
+        </div>
+    </header>
+
+    <!-- Energy Stats -->
+    <section class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value">@totalConsumption.ToString("F1") kWh</div>
+            <div class="stat-label">Total Consumption</div>
+            <span class="stat-change @(consumptionChange >= 0 ? "negative" : "positive")">
+                @(consumptionChange >= 0 ? "↑" : "↓") @Math.Abs(consumptionChange).ToString("F1")% vs last period
+            </span>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-value">$@totalCost.ToString("F2")</div>
+            <div class="stat-label">Energy Cost</div>
+            <span class="stat-change @(costChange >= 0 ? "negative" : "positive")">
+                @(costChange >= 0 ? "↑" : "↓") $@Math.Abs(costChange).ToString("F2")
+            </span>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-value">@solarGeneration.ToString("F1") kWh</div>
+            <div class="stat-label">Solar Generation</div>
+            <span class="stat-change positive">
+                ☀️ @solarPercentage.ToString("F0")% of usage
+            </span>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-value">@batteryLevel.ToString("F0")%</div>
+            <div class="stat-label">Battery Level</div>
+            <span class="stat-change positive">
+                🔋 @batteryCapacity.ToString("F1") kWh stored
+            </span>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: var(--spacing-lg);">
+        <!-- Consumption Chart Area -->
+        <section class="card">
+            <div class="card-header">
+                <h3 class="card-title">Consumption Over Time</h3>
+                <div style="display: flex; gap: var(--spacing-sm);">
+                    <button class="btn @(chartType == "line" ? "btn-primary" : "btn-secondary")"
+                            @onclick='() => chartType = "line"'>Line</button>
+                    <button class="btn @(chartType == "bar" ? "btn-primary" : "btn-secondary")"
+                            @onclick='() => chartType = "bar"'>Bar</button>
+                </div>
+            </div>
+            
+            <!-- Chart Placeholder - Would use a charting library like ApexCharts -->
+            <div style="height: 300px; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; padding: var(--spacing-md);">
+                <div style="display: flex; align-items: flex-end; gap: 8px; height: 100%;">
+                    @foreach (var hour in hourlyData)
+                    {
+                        <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                            <div style="width: 100%; background: var(--gradient-primary); border-radius: var(--radius-sm); height: @(hour.Value * 2)px; min-height: 4px; transition: height var(--transition-normal);"></div>
+                            <span style="font-size: 10px; color: var(--color-text-muted);">@hour.Label</span>
+                        </div>
+                    }
+                </div>
+            </div>
+            
+            <div style="display: flex; justify-content: center; gap: var(--spacing-lg); padding-top: var(--spacing-md); border-top: 1px solid var(--color-border);">
+                <div style="display: flex; align-items: center; gap: var(--spacing-sm);">
+                    <div style="width: 12px; height: 12px; background: var(--gradient-primary); border-radius: 2px;"></div>
+                    <span style="font-size: var(--font-size-sm); color: var(--color-text-secondary);">Grid Power</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: var(--spacing-sm);">
+                    <div style="width: 12px; height: 12px; background: var(--gradient-success); border-radius: 2px;"></div>
+                    <span style="font-size: var(--font-size-sm); color: var(--color-text-secondary);">Solar</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Top Consumers -->
+        <section class="card">
+            <h3 class="card-title" style="margin-bottom: var(--spacing-lg);">Top Energy Consumers</h3>
+            
+            @if (topConsumers.Any())
+            {
+                <div style="display: flex; flex-direction: column; gap: var(--spacing-md);">
+                    @foreach (var consumer in topConsumers)
+                    {
+                        <div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: var(--spacing-xs);">
+                                <span style="font-weight: 500;">@consumer.DeviceName</span>
+                                <span style="color: var(--color-accent-primary);">@consumer.PowerConsumption.ToString("F1") kWh</span>
+                            </div>
+                            <div style="height: 8px; background: var(--color-bg-elevated); border-radius: var(--radius-full); overflow: hidden;">
+                                <div style="height: 100%; width: @consumer.Percentage%; background: var(--gradient-primary); border-radius: var(--radius-full); transition: width var(--transition-normal);"></div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-top: var(--spacing-xs);">
+                                <span style="font-size: var(--font-size-xs); color: var(--color-text-muted);">@consumer.Percentage.ToString("F0")% of total</span>
+                                <span style="font-size: var(--font-size-xs); color: var(--color-text-muted);">$@consumer.Cost.ToString("F2")</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+    </div>
+
+    <!-- Cost Analysis -->
+    <section class="card" style="margin-top: var(--spacing-lg);">
+        <div class="card-header">
+            <h3 class="card-title">Cost Analysis & Recommendations</h3>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--spacing-lg);">
+            <div style="padding: var(--spacing-lg); background: rgba(16, 185, 129, 0.1); border-radius: var(--radius-md); border: 1px solid rgba(16, 185, 129, 0.3);">
+                <h4 style="color: var(--color-accent-success); margin-bottom: var(--spacing-sm);">💡 Savings Tip</h4>
+                <p style="font-size: var(--font-size-sm);">Shift dishwasher usage to off-peak hours (10 PM - 6 AM) to save up to $8/month.</p>
+            </div>
+            
+            <div style="padding: var(--spacing-lg); background: rgba(245, 158, 11, 0.1); border-radius: var(--radius-md); border: 1px solid rgba(245, 158, 11, 0.3);">
+                <h4 style="color: var(--color-accent-warning); margin-bottom: var(--spacing-sm);">⚡ Peak Alert</h4>
+                <p style="font-size: var(--font-size-sm);">High consumption detected between 5-7 PM. Consider pre-cooling before peak hours.</p>
+            </div>
+            
+            <div style="padding: var(--spacing-lg); background: rgba(59, 130, 246, 0.1); border-radius: var(--radius-md); border: 1px solid rgba(59, 130, 246, 0.3);">
+                <h4 style="color: var(--color-accent-primary); margin-bottom: var(--spacing-sm);">📊 Projection</h4>
+                <p style="font-size: var(--font-size-sm);">Estimated monthly bill: $@projectedMonthlyCost.ToString("F2"). @projectedSavings.ToString("F0")% below last month.</p>
+            </div>
+        </div>
+    </section>
+</div>
+
+@code {
+    private string timeRange = "today";
+    private string chartType = "bar";
+    
+    // Stats
+    private decimal totalConsumption = 45.6m;
+    private decimal consumptionChange = -8.2m;
+    private decimal totalCost = 6.84m;
+    private decimal costChange = -0.75m;
+    private decimal solarGeneration = 18.3m;
+    private decimal solarPercentage = 40.1m;
+    private decimal batteryLevel = 78m;
+    private decimal batteryCapacity = 9.8m;
+    private decimal projectedMonthlyCost = 145.00m;
+    private decimal projectedSavings = 12m;
+    
+    // Chart data (simplified)
+    private List<(string Label, decimal Value)> hourlyData = new();
+    private List<DeviceConsumptionDto> topConsumers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEnergyData();
+    }
+
+    private async Task LoadEnergyData()
+    {
+        try
+        {
+            var dashboard = await Api.GetEnergyDashboardAsync();
+            if (dashboard != null)
+            {
+                totalConsumption = dashboard.TotalConsumption;
+                totalCost = dashboard.TotalCost;
+                solarGeneration = dashboard.SolarGeneration;
+                batteryLevel = dashboard.BatteryLevel;
+                topConsumers = dashboard.TopConsumers;
+            }
+            else
+            {
+                LoadDemoData();
+            }
+        }
+        catch (Exception)
+        {
+            LoadDemoData();
+        }
+    }
+
+    private void LoadDemoData()
+    {
+        // Demo hourly data
+        hourlyData = Enumerable.Range(0, 24).Select(h => (
+            Label: h.ToString("00"),
+            Value: 20m + (decimal)(new Random(h).NextDouble() * 80)
+        )).ToList();
+
+        // Demo top consumers
+        topConsumers = new List<DeviceConsumptionDto>
+        {
+            new() { DeviceName = "Air Conditioner", PowerConsumption = 15.2m, Cost = 2.28m, Percentage = 33 },
+            new() { DeviceName = "Water Heater", PowerConsumption = 8.5m, Cost = 1.28m, Percentage = 19 },
+            new() { DeviceName = "Kitchen Appliances", PowerConsumption = 6.3m, Cost = 0.95m, Percentage = 14 },
+            new() { DeviceName = "Lighting", PowerConsumption = 5.1m, Cost = 0.77m, Percentage = 11 },
+            new() { DeviceName = "Entertainment", PowerConsumption = 4.2m, Cost = 0.63m, Percentage = 9 },
+        };
+    }
+
+    private void ExportData()
+    {
+        // Would generate CSV/PDF report
+    }
+}

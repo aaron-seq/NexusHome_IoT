@@ -297,7 +297,7 @@ public class EnhancedMqttClientServiceTests : IDisposable
     [InlineData(3, false)]
     [Trait("Category", "Unit")]
     [Trait("Component", "MqttClient")]
-    public void QualityOfServiceLevel_ValidatesCorrectly(int qosLevel, bool isValid)
+    public async Task QualityOfServiceLevel_ValidatesCorrectly(int qosLevel, bool isValid)
     {
         // Arrange
         const string topicName = "test/topic";
@@ -310,7 +310,7 @@ public class EnhancedMqttClientServiceTests : IDisposable
             var task = _mqttClientService.PublishAsync(topicName, payload, qosLevel, cancellationToken: _cancellationTokenSource.Token);
             
             // We expect InvalidOperationException because client is not connected, not because of invalid QoS
-            Assert.ThrowsAsync<InvalidOperationException>(async () => await task);
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await task);
         }
         else
         {
@@ -319,7 +319,7 @@ public class EnhancedMqttClientServiceTests : IDisposable
             var task = _mqttClientService.PublishAsync(topicName, payload, qosLevel, cancellationToken: _cancellationTokenSource.Token);
             
             // We still expect InvalidOperationException because client is not connected
-            Assert.ThrowsAsync<InvalidOperationException>(async () => await task);
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await task);
         }
     }
 
