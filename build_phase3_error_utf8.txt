@@ -1,0 +1,22 @@
+﻿  Determining projects to restore...
+C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.IoT.csproj : warning NU1608: Detected package version outside of dependency constraint: AutoMapper.Extensions.Microsoft.DependencyInjection 12.0.1 requires AutoMapper (= 12.0.1) but version AutoMapper 13.0.1 was resolved.
+C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.IoT.csproj : warning NU1608: Detected package version outside of dependency constraint: MediatR.Extensions.Microsoft.DependencyInjection 11.1.0 requires MediatR (>= 11.0.0 && < 12.0.0) but version MediatR 12.4.1 was resolved.
+  All projects are up-to-date for restore.
+  Building NexusHome IoT Platform v2.1.0 in Debug mode...
+C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.IoT.csproj : warning NU1608: Detected package version outside of dependency constraint: AutoMapper.Extensions.Microsoft.DependencyInjection 12.0.1 requires AutoMapper (= 12.0.1) but version AutoMapper 13.0.1 was resolved.
+C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.IoT.csproj : warning NU1608: Detected package version outside of dependency constraint: MediatR.Extensions.Microsoft.DependencyInjection 11.1.0 requires MediatR (>= 11.0.0 && < 12.0.0) but version MediatR 12.4.1 was resolved.
+C:\Users\Aaron Sequeira\NexusHome_IoT\Infrastructure\Adapters\MqttDeviceAdapter.cs(14,22): error CS0246: The type or namespace name 'DeviceShadowService' could not be found (are you missing a using directive or an assembly reference?) [C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.IoT.csproj]
+C:\Users\Aaron Sequeira\NexusHome_IoT\Infrastructure\Adapters\MqttDeviceAdapter.cs(24,9): error CS0246: The type or namespace name 'DeviceShadowService' could not be found (are you missing a using directive or an assembly reference?) [C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.IoT.csproj]
+
+Build FAILED.
+
+C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.IoT.csproj : warning NU1608: Detected package version outside of dependency constraint: AutoMapper.Extensions.Microsoft.DependencyInjection 12.0.1 requires AutoMapper (= 12.0.1) but version AutoMapper 13.0.1 was resolved.
+C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.IoT.csproj : warning NU1608: Detected package version outside of dependency constraint: MediatR.Extensions.Microsoft.DependencyInjection 11.1.0 requires MediatR (>= 11.0.0 && < 12.0.0) but version MediatR 12.4.1 was resolved.
+C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.IoT.csproj : warning NU1608: Detected package version outside of dependency constraint: AutoMapper.Extensions.Microsoft.DependencyInjection 12.0.1 requires AutoMapper (= 12.0.1) but version AutoMapper 13.0.1 was resolved.
+C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.IoT.csproj : warning NU1608: Detected package version outside of dependency constraint: MediatR.Extensions.Microsoft.DependencyInjection 11.1.0 requires MediatR (>= 11.0.0 && < 12.0.0) but version MediatR 12.4.1 was resolved.
+C:\Users\Aaron Sequeira\NexusHome_IoT\Infrastructure\Adapters\MqttDeviceAdapter.cs(14,22): error CS0246: The type or namespace name 'DeviceShadowService' could not be found (are you missing a using directive or an assembly reference?) [C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.IoT.csproj]
+C:\Users\Aaron Sequeira\NexusHome_IoT\Infrastructure\Adapters\MqttDeviceAdapter.cs(24,9): error CS0246: The type or namespace name 'DeviceShadowService' could not be found (are you missing a using directive or an assembly reference?) [C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.IoT.csproj]
+    4 Warning(s)
+    2 Error(s)
+
+Time Elapsed 00:00:02.61

@@ -1,5 +1,6 @@
 @page "/"
 @using NexusHome.Web.Services
+@using NexusHome.Web.Shared
 @inject ApiService Api
 @inject SignalRService SignalR
 
@@ -9,10 +10,22 @@
             <h1 class="page-title">Dashboard</h1>
             <p class="page-subtitle">Welcome back! Here's your smart home overview.</p>
         </div>
-        <button class="btn btn-primary" @onclick="RefreshData">
-            🔄 Refresh
-        </button>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <PredictiveActionButton DeviceId="living-room-main" />
+            <button class="btn btn-primary" @onclick="RefreshData">
+                🔄 Refresh
+            </button>
+        </div>
     </header>
+
+    <!-- Spatial 3D Context -->
+    <section class="card" style="margin-bottom: var(--spacing-lg);">
+        <div class="card-header">
+            <h3 class="card-title">Spatial Context</h3>
+            <span class="status-indicator online">Live Digital Twin</span>
+        </div>
+        <SpatialHomeView />
+    </section>
 
     <!-- Stats Grid -->
     <section class="stats-grid">

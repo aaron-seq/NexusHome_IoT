@@ -100,6 +100,53 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
 }
 
+/* ===== Liquid Layout Modes ===== */
+
+/* Relax Mode: Warm, organic, slower transitions */
+.mode-relax {
+    --color-bg-primary: #1c1917; /* Warm dark grey */
+    --color-bg-secondary: #292524;
+    --color-accent-primary: #d97706; /* Amber */
+    --color-accent-secondary: #b45309;
+    
+    --radius-md: 1.5rem; /* Extra rounded */
+    --radius-lg: 2rem;
+    
+    --transition-fast: 300ms ease; /* Slower */
+    --transition-normal: 500ms ease;
+    
+    --glass-bg: rgba(41, 37, 36, 0.4); /* Softer glass */
+}
+
+/* Emergency Mode: High contrast, alert colors, sharp edges */
+.mode-emergency {
+    --color-bg-primary: #000000;
+    --color-bg-secondary: #1a0505; /* Deep red tint */
+    --color-bg-card: rgba(30, 0, 0, 0.9);
+    
+    --color-accent-primary: #dc2626; /* Red */
+    --color-accent-secondary: #ef4444;
+    --color-text-primary: #ffffff;
+    
+    --radius-md: 2px; /* Sharp */
+    --radius-lg: 4px;
+    
+    --glass-bg: rgba(0, 0, 0, 0.9); /* Solid, no glass */
+    --glass-blur: none;
+    
+    --shadow-glow: 0 0 30px rgba(220, 38, 38, 0.5); /* Red Glow */
+}
+.mode-emergency .card {
+    border: 1px solid var(--color-accent-primary);
+    animation: emergency-pulse 2s infinite;
+}
+
+@keyframes emergency-pulse {
+    0% { box-shadow: 0 0 5px rgba(220, 38, 38, 0.2); }
+    50% { box-shadow: 0 0 20px rgba(220, 38, 38, 0.6); }
+    100% { box-shadow: 0 0 5px rgba(220, 38, 38, 0.2); }
+}
+
 /* ===== Base Styles ===== */
 *,
 *::before,

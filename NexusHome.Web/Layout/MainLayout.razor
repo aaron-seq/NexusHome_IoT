@@ -1,6 +1,8 @@
-﻿@inherits LayoutComponentBase
+﻿@using NexusHome.Web.Services
+@inherits LayoutComponentBase
+@inject LayoutStateService LayoutState
 
-<div class="app-container">
+<div class="app-container @LayoutState.GetModeCssClass()">
     <aside class="sidebar">
         <div class="sidebar-logo">
             <span style="font-size: 1.75rem;">🏠</span>
@@ -9,7 +11,18 @@
         
         <NavMenu />
         
-        <div style="margin-top: auto; padding-top: var(--spacing-lg); border-top: 1px solid var(--color-border);">
+        <div style="margin-top: auto; padding-top: var(--spacing-lg); border-top: 1px solid var(--color-border); display: flex; flex-direction: column; gap: 1rem;">
+           
+             <!-- Mode Toggles for Demo -->
+            <div class="mode-selector">
+                <button class="btn btn-sm @(LayoutState.CurrentMode == LayoutStateService.LayoutMode.Standard ? "btn-primary" : "btn-secondary")" 
+                        @onclick="() => LayoutState.SetMode(LayoutStateService.LayoutMode.Standard)">Std</button>
+                <button class="btn btn-sm @(LayoutState.CurrentMode == LayoutStateService.LayoutMode.Relax ? "btn-primary" : "btn-secondary")" 
+                        @onclick="() => LayoutState.SetMode(LayoutStateService.LayoutMode.Relax)">Relax</button>
+                <button class="btn btn-sm @(LayoutState.CurrentMode == LayoutStateService.LayoutMode.Emergency ? "btn-primary" : "btn-secondary")" 
+                        @onclick="() => LayoutState.SetMode(LayoutStateService.LayoutMode.Emergency)">Err</button>
+            </div>
+
             <button class="theme-toggle" @onclick="ToggleTheme">
                 <span>@(isDarkMode ? "☀️" : "🌙")</span>
                 <span>@(isDarkMode ? "Light Mode" : "Dark Mode")</span>
@@ -29,6 +42,12 @@
     {
         // Default to dark mode
         isDarkMode = true;
+        LayoutState.OnChange += StateHasChanged;
+    }
+
+    public void Dispose()
+    {
+        LayoutState.OnChange -= StateHasChanged;
     }
 
     private async Task ToggleTheme()

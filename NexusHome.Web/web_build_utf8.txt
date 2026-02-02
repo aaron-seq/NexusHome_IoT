@@ -1,0 +1,17 @@
+﻿  Determining projects to restore...
+  All projects are up-to-date for restore.
+C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\Shared\PredictiveActionButton.razor(76,6): error CS0103: The name 'keyframes' does not exist in the current context [C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\NexusHome.Web.csproj]
+C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\Services\SignalRService.cs(16,34): warning CS0067: The event 'SignalRService.OnNotificationReceived' is never used [C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\NexusHome.Web.csproj]
+C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\Shared\SpatialHomeView.razor(32,33): warning CS0169: The field 'SpatialHomeView._sceneManager' is never used [C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\NexusHome.Web.csproj]
+C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\Shared\SpatialHomeView.razor(31,33): warning CS0169: The field 'SpatialHomeView._module' is never used [C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\NexusHome.Web.csproj]
+
+Build FAILED.
+
+C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\Services\SignalRService.cs(16,34): warning CS0067: The event 'SignalRService.OnNotificationReceived' is never used [C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\NexusHome.Web.csproj]
+C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\Shared\SpatialHomeView.razor(32,33): warning CS0169: The field 'SpatialHomeView._sceneManager' is never used [C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\NexusHome.Web.csproj]
+C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\Shared\SpatialHomeView.razor(31,33): warning CS0169: The field 'SpatialHomeView._module' is never used [C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\NexusHome.Web.csproj]
+C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\Shared\PredictiveActionButton.razor(76,6): error CS0103: The name 'keyframes' does not exist in the current context [C:\Users\Aaron Sequeira\NexusHome_IoT\NexusHome.Web\NexusHome.Web.csproj]
+    3 Warning(s)
+    1 Error(s)
+
+Time Elapsed 00:00:02.29

@@ -65,7 +65,23 @@ if (jwtSettings != null)
 }
 
 builder.Services.AddControllers();
-builder.Services.AddSignalR();
+// SignalR with Redis Backplane
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+if (!string.IsNullOrEmpty(redisConnectionString))
+{
+    builder.Services.AddSignalR().AddStackExchangeRedis(redisConnectionString, options => {
+        options.Configuration.ChannelPrefix = "NexusHome";
+    });
+    
+    // Register Redis Connection for Shadow State
+    builder.Services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(
+        StackExchange.Redis.ConnectionMultiplexer.Connect(redisConnectionString));
+}
+else
+{
+    builder.Services.AddSignalR();
+}
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -111,8 +127,18 @@ builder.Services.AddScoped<IWeatherDataProvider, OpenWeatherMapProvider>();
 builder.Services.AddScoped<IUtilityPriceProvider, UtilityPriceProvider>();
 
 // Device Adapters and Protocol Bridge
+// Device Adapters and Protocol Bridge
 builder.Services.AddScoped<IProtocolBridge, UnifiedProtocolBridge>();
-builder.Services.AddScoped<MatterDeviceAdapter>();
+
+// Phase 3: Universal Bridge & Shadow State
+builder.Services.AddScoped<DeviceShadowService>();
+builder.Services.AddScoped<UniversalDeviceBridge>();
+
+// Register Adapters as IDeviceAdapter for the Bridge to consume
+builder.Services.AddScoped<IDeviceAdapter, MatterDeviceAdapter>();
+builder.Services.AddScoped<IDeviceAdapter, MqttDeviceAdapter>();
+// Also register concrete types if needed elsewhere, or rely on interface
+builder.Services.AddScoped<MatterDeviceAdapter>(); 
 builder.Services.AddScoped<MqttDeviceAdapter>();
 
 // Background Services
@@ -123,6 +149,9 @@ builder.Services.AddHostedService<AutomationRuleProcessorService>();
 builder.Services.AddHostedService<EnergyOptimizationBackgroundService>();
 builder.Services.AddHostedService<PredictiveMaintenanceBackgroundService>();
 builder.Services.AddHostedService<MqttConnectionService>();
+
+// Phase 3: BLE Simulation (Scoped or Singleton depending on state needs, Scoped is fine for generic service)
+builder.Services.AddScoped<BleSimulationService>();
 
 var app = builder.Build();
 
@@ -145,7 +174,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapHub<SmartDeviceStatusHub>("/hubs/deviceStatus");
+// Maps the Application layer Hub, not the API one (which was deleted)
+app.MapHub<NexusHome.IoT.Application.Hubs.SmartDeviceStatusHub>("/hubs/deviceStatus");
 app.MapHub<EnergyMonitoringHub>("/hubs/energy");
 app.MapHub<SystemNotificationHub>("/hubs/notifications");
 
