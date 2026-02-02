@@ -81,5 +81,23 @@ namespace NexusHome.IoT.Core.Domain
             get => LastExecuted; 
             set => LastExecuted = value; 
         }
+
+        // Phase 4: Proactive AI Properties (Aliased to JSON or new logic)
+        [NotMapped]
+        public string TriggerValue { get; set; } = "80"; // Default threshold
+        
+        [NotMapped]
+        public string TriggerSource 
+        { 
+            get => SmartHomeDeviceId?.ToString() ?? "0"; 
+            set { if (int.TryParse(value, out int id)) SmartHomeDeviceId = id; }
+        }
+
+        [NotMapped]
+        public string ActionType 
+        { 
+            get => Action.Contains("Notify") ? "Notify" : "Control";
+            set { /* No-op or update Action string */ }
+        }
     }
 }

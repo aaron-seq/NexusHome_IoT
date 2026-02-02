@@ -1,0 +1,96 @@
+@using NexusHome.Web.Services
+@inject IJSRuntime JSRuntime
+
+<div class="predictive-action @(IsVisible ? "visible" : "")">
+    <div class="predictive-badge">
+        <span class="sparkle">✨</span>
+        Suggested
+    </div>
+    
+    <button class="btn btn-primary predictive-btn" @onclick="ExecuteAction">
+        <span class="action-icon">@Icon</span>
+        <span class="action-text">
+            Turn On
+            <span class="prediction-time">usually at 6:00 PM</span>
+        </span>
+        <div class="confidence-ring" style="--confidence: @(Confidence)%"></div>
+    </button>
+</div>
+
+<style>
+    .predictive-action {
+        position: relative;
+        display: inline-block;
+        opacity: 0.8;
+        transform: scale(0.95);
+        transition: all var(--transition-normal);
+    }
+    
+    .predictive-action.visible {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    .predictive-badge {
+        position: absolute;
+        top: -10px;
+        right: -5px;
+        background: var(--gradient-primary);
+        font-size: 0.65rem;
+        padding: 2px 6px;
+        border-radius: var(--radius-full);
+        color: white;
+        box-shadow: var(--shadow-sm);
+        z-index: 1;
+        animation: float 3s ease-in-out infinite;
+    }
+
+    .predictive-btn {
+        position: relative;
+        overflow: hidden;
+        padding-right: 3rem; /* Space for ring */
+    }
+
+    .prediction-time {
+        display: block;
+        font-size: 0.65rem;
+        opacity: 0.8;
+        font-weight: normal;
+    }
+
+    .confidence-ring {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: conic-gradient(
+            var(--color-accent-success) var(--confidence), 
+            rgba(255,255,255,0.2) 0
+        );
+        box-shadow: inset 0 0 0 4px var(--color-accent-primary); /* Hack for ring effect */
+    }
+
+    @@keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-3px); }
+    }
+</style>
+
+@code {
+    [Parameter] public string DeviceId { get; set; } = "";
+    
+    // In a real app, these would come from the AI Service
+    private bool IsVisible = true;
+    private string Icon = "💡";
+    private int Confidence = 85;
+
+    private async Task ExecuteAction()
+    {
+        // Simulate action
+        await Task.Delay(200);
+        IsVisible = false; // Hide after action
+    }
+}

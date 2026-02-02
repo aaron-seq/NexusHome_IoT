@@ -1,0 +1,128 @@
+@inject IJSRuntime JSRuntime
+
+<div class="spatial-container">
+    <div id="three-container" style="width: 100%; height: 400px; border-radius: var(--radius-lg); overflow: hidden;"></div>
+    
+    <div class="spatial-controls">
+        <button class="btn btn-sm btn-secondary" @onclick="RotateView">🔄 Rotate</button>
+        <button class="btn btn-sm btn-secondary" @onclick="ResetView">⏹ Reset</button>
+    </div>
+</div>
+
+<style>
+    .spatial-container {
+        position: relative;
+        background: var(--color-bg-card);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        padding: 4px; /* Frame effect */
+    }
+    
+    .spatial-controls {
+        position: absolute;
+        bottom: 1rem;
+        right: 1rem;
+        display: flex;
+        gap: 0.5rem;
+    }
+</style>
+
+@code {
+    private IJSObjectReference? _module;
+    private IJSObjectReference? _sceneManager;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Initialize Three.js scene via simple JS interop script injection
+            // In a real app, this would be a proper module
+            await JSRuntime.InvokeVoidAsync("eval", @"
+                window.initSpatialScene = function(containerId) {
+                    const container = document.getElementById(containerId);
+                    if (!container) return;
+
+                    const scene = new THREE.Scene();
+                    scene.background = new THREE.Color(0x111827); // Dark background
+
+                    const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+                    const renderer = new THREE.WebGLRenderer({ antialias: true });
+                    
+                    renderer.setSize(container.clientWidth, container.clientHeight);
+                    container.appendChild(renderer.domElement);
+
+                    // Add lights
+                    const ambientLight = new THREE.AmbientLight(0x404040, 2);
+                    scene.add(ambientLight);
+                    
+                    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+                    directionalLight.position.set(5, 10, 7.5);
+                    scene.add(directionalLight);
+
+                    // Create 'Room' (Wireframe Cube)
+                    const geometry = new THREE.BoxGeometry(4, 3, 4);
+                    const edges = new THREE.EdgesGeometry(geometry);
+                    const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x3b82f6 })); // Blue lines
+                    scene.add(line);
+
+                    // Create 'Floor'
+                    const planeGeometry = new THREE.PlaneGeometry(10, 10);
+                    const planeMaterial = new THREE.MeshStandardMaterial({ 
+                        color: 0x1f2937,
+                        side: THREE.DoubleSide
+                    });
+                    const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+                    plane.rotation.x = Math.PI / 2;
+                    plane.position.y = -1.5;
+                    scene.add(plane);
+
+                    // Create 'Device' (Sphere)
+                    const sphereGeo = new THREE.SphereGeometry(0.3, 32, 32);
+                    const sphereMat = new THREE.MeshPhongMaterial({ color: 0x10b981, emissive: 0x059669 });
+                    const device = new THREE.Mesh(sphereGeo, sphereMat);
+                    device.position.set(0, 0, 0);
+                    scene.add(device);
+
+                    camera.position.z = 7;
+                    camera.position.y = 2;
+                    camera.lookAt(0, 0, 0);
+
+                    // Animation Loop
+                    let rotating = true;
+                    function animate() {
+                        requestAnimationFrame(animate);
+                        
+                        if (rotating) {
+                            scene.rotation.y += 0.005;
+                        }
+
+                        // Pulse effect for device
+                        const time = Date.now() * 0.003;
+                        device.scale.setScalar(1 + Math.sin(time) * 0.1);
+
+                        renderer.render(scene, camera);
+                    }
+                    animate();
+
+                    // Store control functions
+                    window.spatialControls = {
+                        toggleRotation: () => rotating = !rotating,
+                        reset: () => { scene.rotation.y = 0; rotating = false; }
+                    };
+                }
+            ");
+
+            await JSRuntime.InvokeVoidAsync("initSpatialScene", "three-container");
+        }
+    }
+
+    private async Task RotateView()
+    {
+        await JSRuntime.InvokeVoidAsync("spatialControls.toggleRotation");
+    }
+
+    private async Task ResetView()
+    {
+        await JSRuntime.InvokeVoidAsync("spatialControls.reset");
+    }
+}

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using NexusHome.IoT.Core.Services.Interfaces;
+using NexusHome.IoT.Core.Services; // Added for DeviceShadowService
 
 namespace NexusHome.IoT.Infrastructure.Adapters;
 
@@ -11,6 +12,7 @@ public class MqttDeviceAdapter : IDeviceAdapter
 {
     private readonly ILogger<MqttDeviceAdapter> _logger;
     private readonly IMqttClientService _mqttService;
+    private readonly DeviceShadowService _shadowService; // Phase 3
     private readonly Dictionary<string, DeviceSubscription> _subscriptions = new();
     private bool _isInitialized;
 
@@ -19,11 +21,15 @@ public class MqttDeviceAdapter : IDeviceAdapter
 
     public MqttDeviceAdapter(
         ILogger<MqttDeviceAdapter> logger,
-        IMqttClientService mqttService)
+        IMqttClientService mqttService,
+        DeviceShadowService shadowService)
     {
         _logger = logger;
         _mqttService = mqttService;
+        _shadowService = shadowService;
     }
+
+    // ... (InitializeAsync, ConnectAsync, DisconnectAsync, GetStateAsync remain similar but could read from Shadow) ...
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -34,7 +40,6 @@ public class MqttDeviceAdapter : IDeviceAdapter
 
     public Task<bool> ConnectAsync(string deviceId, CancellationToken cancellationToken = default)
     {
-        // MQTT devices don't require explicit connection - they connect to broker
         _logger.LogDebug("MQTT device {DeviceId} marked as connected", deviceId);
         return Task.FromResult(true);
     }
@@ -48,13 +53,34 @@ public class MqttDeviceAdapter : IDeviceAdapter
         return Task.CompletedTask;
     }
 
-    public Task<DeviceState> GetStateAsync(string deviceId, CancellationToken cancellationToken = default)
+    public async Task<DeviceState> GetStateAsync(string deviceId, CancellationToken cancellationToken = default)
     {
-        // MQTT state is typically push-based; return cached state
+        // Phase 3: Try to read from Shadow first
+        try 
+        {
+            var (reported, _) = await _shadowService.GetShadowAsync(deviceId);
+            if (reported.Count > 0)
+            {
+                return new DeviceState
+                {
+                    DeviceId = deviceId,
+                    IsOnline = true,
+                    LastUpdated = DateTime.UtcNow,
+                    Properties = reported,
+                    IsOn = reported.TryGetValue("state", out var s) && s?.ToString() == "ON"
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to read shadow for {DeviceId}", deviceId);
+        }
+
+        // Fallback to in-memory if shadow fails or empty
         var state = new DeviceState
         {
             DeviceId = deviceId,
-            IsOnline = true, // Assume online if we can query
+            IsOnline = true, 
             LastUpdated = DateTime.UtcNow
         };
 
@@ -65,7 +91,7 @@ public class MqttDeviceAdapter : IDeviceAdapter
                         stateVal?.ToString()?.ToLowerInvariant() == "on";
         }
 
-        return Task.FromResult(state);
+        return state;
     }
 
     public async Task<CommandResult> ExecuteCommandAsync(string deviceId, DeviceCommand command, CancellationToken cancellationToken = default)
@@ -127,12 +153,16 @@ public class MqttDeviceAdapter : IDeviceAdapter
 
         await _mqttService.SubscribeAsync(statusTopic, async (topic, payload) =>
         {
+            // Parse topic to get property name
+            var topicParts = topic.Split('/');
+            var property = topicParts.Length > 3 ? topicParts[3] : "state";
+            
+            // Phase 3: Update Shadow State (Resilience)
+            var props = new Dictionary<string, object> { { property, payload } };
+            await _shadowService.UpdateReportedStateAsync(deviceId, props);
+
             if (_subscriptions.TryGetValue(deviceId, out var sub) && sub.IsActive)
             {
-                // Parse topic to get property name
-                var topicParts = topic.Split('/');
-                var property = topicParts.Length > 3 ? topicParts[3] : "state";
-                
                 var change = new DeviceStateChange
                 {
                     DeviceId = deviceId,
@@ -145,7 +175,6 @@ public class MqttDeviceAdapter : IDeviceAdapter
                 sub.CachedProperties[property] = payload;
                 sub.Callback?.Invoke(change);
             }
-            await Task.CompletedTask;
         });
     }
 
