@@ -22,12 +22,15 @@ namespace NexusHome.IoT.Core.Services;
 
         public async Task EvaluateRulesAsync()
         {
-            using var scope = _serviceProvider.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<SmartHomeDbContext>();
-            var predictionService = scope.ServiceProvider.GetRequiredService<NexusHome.IoT.AI.IPredictiveMaintenanceService>(); // Phase 4
-
             try
             {
+                // Scope creation and service resolution belong inside the try:
+                // this runs on a background loop, and a resolution failure that
+                // escapes here tears down the hosted service.
+                using var scope = _serviceProvider.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<SmartHomeDbContext>();
+                var predictionService = scope.ServiceProvider.GetRequiredService<NexusHome.IoT.AI.IPredictiveMaintenanceService>();
+
                 var rules = await context.AutomationRules
                     .Where(r => r.IsEnabled)
                     .ToListAsync();

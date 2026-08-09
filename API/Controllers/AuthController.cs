@@ -57,9 +57,22 @@ public class AuthController : ControllerBase
 
     private bool VerifyPassword(string inputPassword, string storedHash)
     {
-        // simplistic placeholder: exact match or simple hash check
-        // In reality, this should be: BCrypt.Verify(inputPassword, storedHash)
-        return inputPassword == storedHash; 
+        if (string.IsNullOrEmpty(storedHash))
+        {
+            return false;
+        }
+
+        try
+        {
+            return BCrypt.Net.BCrypt.Verify(inputPassword, storedHash);
+        }
+        catch (BCrypt.Net.SaltParseException)
+        {
+            // A stored value that is not a BCrypt hash means the record predates
+            // hashing; reject it rather than falling back to a plaintext compare.
+            _logger.LogError("User record contains a password hash that is not a valid BCrypt hash");
+            return false;
+        }
     }
 
     private string GenerateJwtToken(User user)

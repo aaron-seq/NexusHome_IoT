@@ -1,9 +1,36 @@
-**/.env
+# Build output
 **/bin/
 **/obj/
-**/.vs/
-**/.vscode/
 **/TestResults/
 **/coverage*
+**/publish/
+
+# IDE
+**/.vs/
+**/.vscode/
+**/.idea/
+*.user
+
+# Secrets and local environment
+**/.env
+.env.*
+!.env.example
+
+# Local databases
+*.db
+*.db-shm
+*.db-wal
+
+# Logs and build transcripts (these do not belong in source control)
+**/logs/
+*.log
+build_*.txt
+build_*.log
+*_build.txt
+errors.txt
+
+# Node
 node_modules/
+
+# Docker
 Dockerfile-*cache

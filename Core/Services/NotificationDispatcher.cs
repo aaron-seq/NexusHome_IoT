@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.SignalR;
 using NexusHome.IoT.Core.Services.Interfaces;
-using NexusHome.IoT.API.Hubs;
+using NexusHome.IoT.Application.Hubs;
 
 namespace NexusHome.IoT.Core.Services;
 

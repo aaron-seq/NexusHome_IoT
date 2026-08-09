@@ -1,514 +1,398 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using NexusHome.IoT.Infrastructure.Data;
-using NexusHome.IoT.Core.Services.Interfaces;
-using NexusHome.IoT.Infrastructure.Services;
-using NexusHome.IoT.Core.Services;
-using NexusHome.IoT.Application.Hubs;
-using NexusHome.IoT.API.Middleware;
-using NexusHome.IoT.Infrastructure.Configuration;
-using Serilog;
-using Microsoft.OpenApi.Models;
-using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
-using System.Text.Json;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using NexusHome.IoT.API.Middleware;
+using NexusHome.IoT.Application.Hubs;
+using NexusHome.IoT.Core.Services;
+using NexusHome.IoT.Core.Services.Interfaces;
+using NexusHome.IoT.Infrastructure.Adapters;
+using NexusHome.IoT.Infrastructure.Configuration;
+using NexusHome.IoT.Infrastructure.Data;
+using NexusHome.IoT.Infrastructure.Services;
+using Serilog;
+using StackExchange.Redis;
 
-namespace NexusHome.IoT;
+var builder = WebApplication.CreateBuilder(args);
 
-public class Program
+// ---------------------------------------------------------------------------
+// Logging
+// ---------------------------------------------------------------------------
+builder.Host.UseSerilog((context, loggerConfiguration) => loggerConfiguration
+    .ReadFrom.Configuration(context.Configuration)
+    .Enrich.FromLogContext()
+    .WriteTo.Console());
+
+// ---------------------------------------------------------------------------
+// JWT signing key
+//
+// Resolved before anything binds JwtAuthentication so that the options pattern
+// and the JWT bearer handler always agree on the same key. A signing key
+// shipped in source control is equivalent to no signing key at all, so refuse
+// to start in production rather than accept forged tokens.
+// ---------------------------------------------------------------------------
+const string JwtSecretKeyPath = "JwtAuthentication:SecretKey";
+var configuredSecret = builder.Configuration[JwtSecretKeyPath];
+
+if (string.IsNullOrWhiteSpace(configuredSecret) || configuredSecret.Length < 32)
 {
-    public static async Task Main(string[] args)
+    if (!builder.Environment.IsDevelopment())
     {
-        var loggerConfiguration = new LoggerConfiguration()
-            .WriteTo.Console()
-            .WriteTo.File("logs/nexushome-.txt",
-                rollingInterval: RollingInterval.Day,
-                retainedFileCountLimit: 30,
-                shared: true,
-                flushToDiskInterval: TimeSpan.FromSeconds(1));
-
-        Log.Logger = loggerConfiguration.CreateBootstrapLogger();
-
-        try
-        {
-            var applicationBuilder = WebApplication.CreateBuilder(args);
-            
-            ConfigureLogging(applicationBuilder);
-            ConfigureServices(applicationBuilder.Services, applicationBuilder.Configuration);
-            
-            var smartHomeApplication = applicationBuilder.Build();
-            
-            ConfigureApplicationPipeline(smartHomeApplication);
-            
-            await InitializeApplicationDatabase(smartHomeApplication);
-            
-            Log.Information("NexusHome IoT Platform started successfully at {StartTime}", DateTime.UtcNow);
-            
-            await smartHomeApplication.RunAsync();
-        }
-        catch (Exception applicationException)
-        {
-            Log.Fatal(applicationException, "NexusHome IoT Platform terminated unexpectedly");
-            throw;
-        }
-        finally
-        {
-            await Log.CloseAndFlushAsync();
-        }
+        throw new InvalidOperationException(
+            $"{JwtSecretKeyPath} must be configured with at least 32 characters. " +
+            "Set it via the JwtAuthentication__SecretKey environment variable or a secret store.");
     }
 
-    private static void ConfigureLogging(WebApplicationBuilder applicationBuilder)
-    {
-        applicationBuilder.Host.UseSerilog((hostingContext, loggerConfiguration) =>
-            loggerConfiguration.ReadFrom.Configuration(hostingContext.Configuration));
-    }
+    builder.Configuration[JwtSecretKeyPath] = "nexushome-development-only-signing-key-do-not-use-in-production";
+    Log.Warning("{Path} is missing or too short. Using an insecure development key.", JwtSecretKeyPath);
+}
 
-    private static void ConfigureServices(IServiceCollection serviceCollection, IConfiguration applicationConfiguration)
-    {
-        RegisterCoreInfrastructure(serviceCollection, applicationConfiguration);
-        RegisterBusinessServices(serviceCollection);
-        RegisterWebApiServices(serviceCollection);
-        RegisterExternalIntegrations(serviceCollection, applicationConfiguration);
-    }
+// ---------------------------------------------------------------------------
+// Strongly typed configuration
+// ---------------------------------------------------------------------------
+builder.Services.Configure<JwtAuthenticationSettings>(builder.Configuration.GetSection("JwtAuthentication"));
+builder.Services.Configure<MqttBrokerSettings>(builder.Configuration.GetSection("MqttBroker"));
+builder.Services.Configure<WeatherApiSettings>(builder.Configuration.GetSection("WeatherApi"));
 
-    private static void RegisterCoreInfrastructure(IServiceCollection serviceCollection, IConfiguration applicationConfiguration)
-    {
-        RegisterDatabaseServices(serviceCollection, applicationConfiguration);
-        RegisterAuthenticationAndAuthorization(serviceCollection, applicationConfiguration);
-        RegisterCachingServices(serviceCollection, applicationConfiguration);
-        RegisterMessagingServices(serviceCollection, applicationConfiguration);
-    }
+// ---------------------------------------------------------------------------
+// Database
+//
+// The provider is selectable so the platform runs locally with zero external
+// dependencies (Sqlite/InMemory) while production keeps using SQL Server.
+// ---------------------------------------------------------------------------
+var databaseProvider = builder.Configuration.GetValue("Database:Provider", "SqlServer")!;
+var defaultConnection = builder.Configuration.GetConnectionString("DefaultConnection");
 
-    private static void RegisterDatabaseServices(IServiceCollection serviceCollection, IConfiguration applicationConfiguration)
+builder.Services.AddDbContext<SmartHomeDbContext>(options =>
+{
+    switch (databaseProvider.ToLowerInvariant())
     {
-        serviceCollection.AddDbContext<SmartHomeDbContext>(databaseOptions =>
-        {
-            var connectionString = applicationConfiguration.GetConnectionString("DefaultConnection")
-                ?? "Server=localhost;Database=NexusHomeIoT;Trusted_Connection=true;MultipleActiveResultSets=true;TrustServerCertificate=true";
+        case "inmemory":
+            options.UseInMemoryDatabase("NexusHomeIoT");
+            break;
 
-            databaseOptions.UseSqlServer(connectionString, sqlServerOptions =>
+        case "sqlite":
+            options.UseSqlite(defaultConnection ?? "Data Source=nexushome.db");
+            break;
+
+        default:
+            options.UseSqlServer(defaultConnection, sqlOptions =>
             {
-                sqlServerOptions.EnableRetryOnFailure(
-                    maxRetryCount: 3,
+                // Transient faults are expected when the database container is
+                // still warming up alongside the app.
+                sqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 5,
                     maxRetryDelay: TimeSpan.FromSeconds(30),
                     errorNumbersToAdd: null);
-                sqlServerOptions.CommandTimeout(120);
+                sqlOptions.CommandTimeout(120);
             });
-
-            databaseOptions.EnableSensitiveDataLogging(false);
-            databaseOptions.EnableServiceProviderCaching();
-            databaseOptions.EnableDetailedErrors(false);
-        });
+            break;
     }
+});
 
-    private static void RegisterAuthenticationAndAuthorization(IServiceCollection serviceCollection, IConfiguration applicationConfiguration)
+// ---------------------------------------------------------------------------
+// Authentication & authorization
+// ---------------------------------------------------------------------------
+var jwtSettings = builder.Configuration.GetSection("JwtAuthentication").Get<JwtAuthenticationSettings>()
+    ?? new JwtAuthenticationSettings();
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
     {
-        var jwtConfigurationSettings = applicationConfiguration.GetSection("JwtAuthentication").Get<JwtAuthenticationSettings>()
-            ?? new JwtAuthenticationSettings();
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = jwtSettings.ValidateIssuer,
+            ValidateAudience = jwtSettings.ValidateAudience,
+            ValidateLifetime = jwtSettings.ValidateLifetime,
+            ValidateIssuerSigningKey = jwtSettings.ValidateIssuerSigningKey,
+            ValidIssuer = jwtSettings.Issuer,
+            ValidAudience = jwtSettings.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.SecretKey)),
+            ClockSkew = TimeSpan.FromMinutes(jwtSettings.ClockSkewMinutes)
+        };
 
-        serviceCollection.AddSingleton(jwtConfigurationSettings);
-
-        serviceCollection.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(jwtOptions =>
+        // Browsers cannot set Authorization headers on WebSocket handshakes, so
+        // SignalR clients pass the token as a query string parameter instead.
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
             {
-                jwtOptions.TokenValidationParameters = new TokenValidationParameters
+                var accessToken = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
                 {
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidateLifetime = true,
-                    ValidateIssuerSigningKey = true,
-                    ValidIssuer = jwtConfigurationSettings.Issuer,
-                    ValidAudience = jwtConfigurationSettings.Audience,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtConfigurationSettings.SecretKey)),
-                    ClockSkew = TimeSpan.FromMinutes(5)
-                };
-
-                jwtOptions.Events = new JwtBearerEvents
-                {
-                    OnMessageReceived = tokenContext =>
-                    {
-                        var accessTokenFromQuery = tokenContext.Request.Query["access_token"];
-                        var currentRequestPath = tokenContext.HttpContext.Request.Path;
-
-                        if (!string.IsNullOrEmpty(accessTokenFromQuery) && currentRequestPath.StartsWithSegments("/hubs"))
-                        {
-                            tokenContext.Token = accessTokenFromQuery;
-                        }
-                        return Task.CompletedTask;
-                    }
-                };
-            });
-
-        serviceCollection.AddAuthorization(authorizationOptions =>
-        {
-            authorizationOptions.AddPolicy("AdminAccess", policy => policy.RequireRole("Administrator"));
-            authorizationOptions.AddPolicy("UserAccess", policy => policy.RequireRole("User", "Administrator"));
-            authorizationOptions.AddPolicy("DeviceAccess", policy => policy.RequireRole("Device", "User", "Administrator"));
-            authorizationOptions.AddPolicy("TechnicianAccess", policy => policy.RequireRole("Technician", "Administrator"));
-        });
-    }
-
-    private static void RegisterCachingServices(IServiceCollection serviceCollection, IConfiguration applicationConfiguration)
-    {
-        serviceCollection.AddMemoryCache(memoryCacheOptions =>
-        {
-            memoryCacheOptions.SizeLimit = 1024;
-            memoryCacheOptions.CompactionPercentage = 0.25;
-        });
-
-        var redisConnectionString = applicationConfiguration.GetConnectionString("Redis");
-        if (!string.IsNullOrEmpty(redisConnectionString))
-        {
-            serviceCollection.AddStackExchangeRedisCache(redisOptions =>
-            {
-                redisOptions.Configuration = redisConnectionString;
-                redisOptions.InstanceName = "NexusHomeIoT";
-            });
-        }
-    }
-
-    private static void RegisterMessagingServices(IServiceCollection serviceCollection, IConfiguration applicationConfiguration)
-    {
-        serviceCollection.Configure<MqttBrokerSettings>(applicationConfiguration.GetSection("MqttBroker"));
-        serviceCollection.AddSingleton<IMqttClientService, EnhancedMqttClientService>();
-    }
-
-    private static void RegisterBusinessServices(IServiceCollection serviceCollection)
-    {
-        serviceCollection.AddScoped<ISmartDeviceManager, SmartDeviceManager>();
-        serviceCollection.AddScoped<IEnergyConsumptionAnalyzer, EnergyConsumptionAnalyzer>();
-        serviceCollection.AddScoped<IAutomationRuleEngine, IntelligentAutomationRuleEngine>();
-        serviceCollection.AddScoped<IPredictiveMaintenanceEngine, AdvancedPredictiveMaintenanceEngine>();
-        serviceCollection.AddScoped<IEnergyOptimizationEngine, MachineLearningEnergyOptimizationEngine>();
-        serviceCollection.AddScoped<INotificationDispatcher, MultiChannelNotificationDispatcher>();
-        serviceCollection.AddScoped<IDataAggregationService, RealTimeDataAggregationService>();
-        serviceCollection.AddScoped<ISecurityManager, ComprehensiveSecurityManager>();
-
-        RegisterBackgroundServices(serviceCollection);
-    }
-
-    private static void RegisterBackgroundServices(IServiceCollection serviceCollection)
-    {
-        serviceCollection.AddHostedService<DeviceDataCollectionService>();
-        serviceCollection.AddHostedService<EnergyMonitoringBackgroundService>();
-        serviceCollection.AddHostedService<MaintenanceSchedulingService>();
-        serviceCollection.AddHostedService<AutomationRuleProcessorService>();
-        serviceCollection.AddHostedService<SystemHealthMonitoringService>();
-    }
-
-    private static void RegisterWebApiServices(IServiceCollection serviceCollection)
-    {
-        serviceCollection.AddControllers(controllerOptions =>
-        {
-            controllerOptions.ReturnHttpNotAcceptable = true;
-            controllerOptions.RespectBrowserAcceptHeader = true;
-        })
-        .AddJsonOptions(jsonOptions =>
-        {
-            jsonOptions.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-            jsonOptions.JsonSerializerOptions.WriteIndented = false;
-            jsonOptions.JsonSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
-        });
-
-        RegisterSwaggerDocumentation(serviceCollection);
-        RegisterRateLimiting(serviceCollection);
-        RegisterSignalRServices(serviceCollection);
-        RegisterHealthChecks(serviceCollection);
-        RegisterCorsPolicy(serviceCollection);
-    }
-
-    private static void RegisterSwaggerDocumentation(IServiceCollection serviceCollection)
-    {
-        serviceCollection.AddEndpointsApiExplorer();
-        serviceCollection.AddSwaggerGen(swaggerOptions =>
-        {
-            swaggerOptions.SwaggerDoc("v1", new OpenApiInfo
-            {
-                Title = "NexusHome Smart IoT Platform API",
-                Version = "v2.1.0",
-                Description = "Advanced Smart Home Energy Management & IoT Control System with AI-powered optimization",
-                Contact = new OpenApiContact
-                {
-                    Name = "Aaron Sequeira",
-                    Email = "aaron@nexushome.tech",
-                    Url = new Uri("https://github.com/aaron-seq/NexusHome_IoT")
-                },
-                License = new OpenApiLicense
-                {
-                    Name = "MIT License",
-                    Url = new Uri("https://opensource.org/licenses/MIT")
+                    context.Token = accessToken;
                 }
-            });
 
-            swaggerOptions.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+                return Task.CompletedTask;
+            }
+        };
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminAccess", policy => policy.RequireRole("Administrator"));
+    options.AddPolicy("UserAccess", policy => policy.RequireRole("User", "Administrator"));
+    options.AddPolicy("DeviceAccess", policy => policy.RequireRole("Device", "User", "Administrator"));
+    options.AddPolicy("TechnicianAccess", policy => policy.RequireRole("Technician", "Administrator"));
+});
+
+// ---------------------------------------------------------------------------
+// CORS
+// ---------------------------------------------------------------------------
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? ["http://localhost:5000", "https://localhost:5001", "http://localhost:5179"];
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("BlazorClient", policy => policy
+        .WithOrigins(allowedOrigins)
+        .AllowAnyMethod()
+        .AllowAnyHeader()
+        .AllowCredentials());
+});
+
+// ---------------------------------------------------------------------------
+// Caching, SignalR and the Redis backplane
+//
+// The multiplexer is registered as a lazy factory. Connecting eagerly here
+// would take the whole process down whenever Redis is briefly unavailable.
+// ---------------------------------------------------------------------------
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+var signalRBuilder = builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+});
+
+builder.Services.AddMemoryCache();
+
+if (!string.IsNullOrWhiteSpace(redisConnectionString))
+{
+    var redisOptions = ConfigurationOptions.Parse(redisConnectionString);
+    redisOptions.AbortOnConnectFail = false;
+
+    builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisOptions));
+    signalRBuilder.AddStackExchangeRedis(redisConnectionString, options =>
+    {
+        options.Configuration.AbortOnConnectFail = false;
+        options.Configuration.ChannelPrefix = RedisChannel.Literal("NexusHome");
+    });
+
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConnectionString;
+        options.InstanceName = "NexusHomeIoT";
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Web API
+// ---------------------------------------------------------------------------
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+        options.JsonSerializerOptions.DefaultIgnoreCondition =
+            System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+    });
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "NexusHome IoT API",
+        Version = "v1",
+        Description = "Smart home energy management and IoT control platform."
+    });
+
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme.",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer"
+    });
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
             {
-                Description = "JWT Authorization header using the Bearer scheme. Enter 'Bearer' [space] and then your token.",
-                Name = "Authorization",
-                In = ParameterLocation.Header,
-                Type = SecuritySchemeType.ApiKey,
-                Scheme = "Bearer"
-            });
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 
-            swaggerOptions.AddSecurityRequirement(new OpenApiSecurityRequirement
-            {
-                {
-                    new OpenApiSecurityScheme
-                    {
-                        Reference = new OpenApiReference
-                        {
-                            Type = ReferenceType.SecurityScheme,
-                            Id = "Bearer"
-                        }
-                    },
-                    Array.Empty<string>()
-                }
-            });
-        });
-    }
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-    private static void RegisterRateLimiting(IServiceCollection serviceCollection)
+    options.AddFixedWindowLimiter("StandardApiLimiter", limiterOptions =>
     {
-        serviceCollection.AddRateLimiter(rateLimitOptions =>
+        limiterOptions.PermitLimit = builder.Configuration.GetValue("RateLimit:PermitLimit", 1000);
+        limiterOptions.Window = TimeSpan.FromSeconds(builder.Configuration.GetValue("RateLimit:WindowSeconds", 60));
+        limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        limiterOptions.QueueLimit = 100;
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Health checks
+// ---------------------------------------------------------------------------
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<SmartHomeDbContext>("database");
+
+// ---------------------------------------------------------------------------
+// Application services
+// ---------------------------------------------------------------------------
+builder.Services.AddScoped<ISmartDeviceManager, SmartDeviceManager>();
+builder.Services.AddScoped<IEnergyConsumptionAnalyzer, EnergyConsumptionAnalyzer>();
+builder.Services.AddScoped<IAutomationRuleEngine, AutomationRuleEngine>();
+builder.Services.AddScoped<IPredictiveMaintenanceService, PredictiveMaintenanceService>();
+builder.Services.AddScoped<IEnergyOptimizationService, EnergyOptimizationService>();
+builder.Services.AddScoped<IMatterService, MatterService>();
+builder.Services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
+builder.Services.AddScoped<IDataAggregationService, DataAggregationService>();
+builder.Services.AddScoped<ISecurityManager, SecurityManager>();
+
+// The ML-backed anomaly detection stack is a separate contract from
+// Core.Services.IPredictiveMaintenanceService and is resolved by the
+// automation rule engine at evaluation time.
+builder.Services.AddSingleton<Microsoft.ML.MLContext>(_ => new Microsoft.ML.MLContext(seed: 0));
+builder.Services.AddScoped<NexusHome.IoT.AI.IPredictiveMaintenanceService, NexusHome.IoT.AI.PredictiveMaintenanceService>();
+
+builder.Services.AddSingleton<IMqttClientService, EnhancedMqttClientService>();
+builder.Services.AddHttpClient<IWeatherDataProvider, OpenWeatherMapProvider>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+builder.Services.AddHttpClient<IUtilityPriceProvider, UtilityPriceProvider>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(45);
+});
+
+builder.Services.AddScoped<IProtocolBridge, UnifiedProtocolBridge>();
+// Holds live mDNS discovery state, so it must outlive a single request scope.
+builder.Services.AddSingleton<MatterDiscoveryService>();
+builder.Services.AddScoped<DeviceShadowService>();
+builder.Services.AddScoped<UniversalDeviceBridge>();
+builder.Services.AddScoped<IDeviceAdapter, MatterDeviceAdapter>();
+builder.Services.AddScoped<IDeviceAdapter, MqttDeviceAdapter>();
+builder.Services.AddScoped<MatterDeviceAdapter>();
+builder.Services.AddScoped<MqttDeviceAdapter>();
+builder.Services.AddScoped<BleSimulationService>();
+
+builder.Services.AddHostedService<DeviceDataCollectionService>();
+builder.Services.AddHostedService<EnergyMonitoringBackgroundService>();
+builder.Services.AddHostedService<MaintenanceSchedulingService>();
+builder.Services.AddHostedService<AutomationRuleProcessorService>();
+builder.Services.AddHostedService<EnergyOptimizationBackgroundService>();
+builder.Services.AddHostedService<PredictiveMaintenanceBackgroundService>();
+builder.Services.AddHostedService<MqttConnectionService>();
+
+var app = builder.Build();
+
+// ---------------------------------------------------------------------------
+// HTTP pipeline
+// ---------------------------------------------------------------------------
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
+    app.UseSwagger();
+    app.UseSwaggerUI(options => options.SwaggerEndpoint("/swagger/v1/swagger.json", "NexusHome IoT API v1"));
+}
+else
+{
+    app.UseHsts();
+}
+
+// Must run before authentication so the scheme and client IP reflect the
+// original request when running behind a reverse proxy or load balancer.
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
+
+app.UseMiddleware<ErrorHandlingMiddleware>();
+app.UseMiddleware<RequestLoggingMiddleware>();
+app.UseMiddleware<SecurityHeadersMiddleware>();
+
+// Containers terminate TLS at the ingress, so an in-container redirect would
+// produce a loop against a plain-HTTP listener.
+if (builder.Configuration.GetValue("Security:UseHttpsRedirection", !app.Environment.IsDevelopment()))
+{
+    app.UseHttpsRedirection();
+}
+
+app.UseRouting();
+app.UseCors("BlazorClient");
+app.UseRateLimiter();
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapControllers().RequireRateLimiting("StandardApiLimiter");
+
+app.MapHub<SmartDeviceStatusHub>("/hubs/deviceStatus");
+app.MapHub<EnergyMonitoringHub>("/hubs/energy");
+app.MapHub<SystemNotificationHub>("/hubs/notifications");
+app.MapHub<MaintenanceAlertHub>("/hubs/maintenance");
+
+// Liveness must not depend on external systems, otherwise a transient database
+// outage causes the orchestrator to kill an otherwise healthy container.
+app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = _ => false
+});
+app.MapHealthChecks("/health/ready");
+
+await InitializeDatabaseAsync(app);
+
+await app.RunAsync();
+
+static async Task InitializeDatabaseAsync(WebApplication app)
+{
+    using var scope = app.Services.CreateScope();
+    var services = scope.ServiceProvider;
+    var logger = services.GetRequiredService<ILogger<Program>>();
+
+    try
+    {
+        var context = services.GetRequiredService<SmartHomeDbContext>();
+
+        // The project has no EF migrations yet; EnsureCreated keeps local and
+        // container runs working until an initial migration is authored.
+        if (context.Database.IsRelational() && context.Database.GetMigrations().Any())
         {
-            rateLimitOptions.AddFixedWindowLimiter("StandardApiLimiter", fixedWindowOptions =>
-            {
-                fixedWindowOptions.PermitLimit = 1000;
-                fixedWindowOptions.Window = TimeSpan.FromMinutes(1);
-                fixedWindowOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-                fixedWindowOptions.QueueLimit = 100;
-            });
-
-            rateLimitOptions.AddFixedWindowLimiter("DeviceTelemetryLimiter", fixedWindowOptions =>
-            {
-                fixedWindowOptions.PermitLimit = 10000;
-                fixedWindowOptions.Window = TimeSpan.FromMinutes(1);
-                fixedWindowOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-                fixedWindowOptions.QueueLimit = 1000;
-            });
-        });
-    }
-
-    private static void RegisterSignalRServices(IServiceCollection serviceCollection)
-    {
-        serviceCollection.AddSignalR(signalROptions =>
+            await context.Database.MigrateAsync();
+        }
+        else
         {
-            signalROptions.EnableDetailedErrors = true;
-            signalROptions.KeepAliveInterval = TimeSpan.FromSeconds(15);
-            signalROptions.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
-            signalROptions.HandshakeTimeout = TimeSpan.FromSeconds(15);
-        });
-    }
-
-    private static void RegisterHealthChecks(IServiceCollection serviceCollection)
-    {
-        serviceCollection.AddHealthChecks()
-            .AddDbContextCheck<SmartHomeDbContext>("database_connectivity")
-            .AddCheck("mqtt_broker_status", () => HealthCheckResult.Healthy("MQTT broker is responsive"))
-            .AddCheck("system_memory_usage", () =>
-            {
-                var currentMemoryUsage = GC.GetTotalMemory(false);
-                var memoryThresholdBytes = 1024L * 1024L * 1024L; // 1GB threshold
-
-                return currentMemoryUsage < memoryThresholdBytes
-                    ? HealthCheckResult.Healthy($"Memory usage is optimal: {currentMemoryUsage / (1024 * 1024)} MB")
-                    : HealthCheckResult.Degraded($"High memory usage detected: {currentMemoryUsage / (1024 * 1024)} MB");
-            });
-    }
-
-    private static void RegisterCorsPolicy(IServiceCollection serviceCollection)
-    {
-        serviceCollection.AddCors(corsOptions =>
-        {
-            corsOptions.AddDefaultPolicy(corsBuilder =>
-            {
-                corsBuilder.AllowAnyOrigin()
-                           .AllowAnyMethod()
-                           .AllowAnyHeader();
-            });
-        });
-    }
-
-    private static void RegisterExternalIntegrations(IServiceCollection serviceCollection, IConfiguration applicationConfiguration)
-    {
-        var weatherApiKey = applicationConfiguration["WeatherApi:ApiKey"];
-        if (!string.IsNullOrEmpty(weatherApiKey))
-        {
-            serviceCollection.Configure<WeatherApiSettings>(applicationConfiguration.GetSection("WeatherApi"));
-            serviceCollection.AddHttpClient<IWeatherDataProvider, OpenWeatherMapProvider>(httpClient =>
-            {
-                httpClient.BaseAddress = new Uri("https://api.openweathermap.org/data/2.5/");
-                httpClient.Timeout = TimeSpan.FromSeconds(30);
-            });
+            await context.Database.EnsureCreatedAsync();
         }
 
-        serviceCollection.AddHttpClient<IUtilityPriceProvider, UtilityPriceProvider>(httpClient =>
-        {
-            httpClient.Timeout = TimeSpan.FromSeconds(45);
-        });
+        await DatabaseSeeder.SeedAsync(context, services, logger, app.Environment);
+        logger.LogInformation("Database initialization completed");
     }
-
-    private static void ConfigureApplicationPipeline(WebApplication smartHomeApplication)
+    catch (Exception exception)
     {
-        ConfigureDevelopmentMiddleware(smartHomeApplication);
-        ConfigureProductionMiddleware(smartHomeApplication);
-        ConfigureSecurityMiddleware(smartHomeApplication);
-        ConfigureRoutingAndEndpoints(smartHomeApplication);
-    }
-
-    private static void ConfigureDevelopmentMiddleware(WebApplication smartHomeApplication)
-    {
-        if (smartHomeApplication.Environment.IsDevelopment())
-        {
-            smartHomeApplication.UseDeveloperExceptionPage();
-            smartHomeApplication.UseSwagger();
-            smartHomeApplication.UseSwaggerUI(swaggerUiOptions =>
-            {
-                swaggerUiOptions.SwaggerEndpoint("/swagger/v1/swagger.json", "NexusHome IoT API v2.1.0");
-                swaggerUiOptions.RoutePrefix = "api-docs";
-                swaggerUiOptions.DisplayRequestDuration();
-                swaggerUiOptions.EnableDeepLinking();
-                swaggerUiOptions.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.None);
-            });
-        }
-    }
-
-    private static void ConfigureProductionMiddleware(WebApplication smartHomeApplication)
-    {
-        if (!smartHomeApplication.Environment.IsDevelopment())
-        {
-            smartHomeApplication.UseExceptionHandler("/Error");
-            smartHomeApplication.UseHsts();
-        }
-    }
-
-    private static void ConfigureSecurityMiddleware(WebApplication smartHomeApplication)
-    {
-        smartHomeApplication.UseForwardedHeaders(new ForwardedHeadersOptions
-        {
-            ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-        });
-        
-        smartHomeApplication.UseHttpsRedirection();
-        smartHomeApplication.UseStaticFiles();
-        smartHomeApplication.UseRouting();
-        smartHomeApplication.UseCors();
-        smartHomeApplication.UseRateLimiter();
-
-        smartHomeApplication.UseMiddleware<RequestLoggingMiddleware>();
-        smartHomeApplication.UseMiddleware<ComprehensiveErrorHandlingMiddleware>();
-        smartHomeApplication.UseMiddleware<SecurityHeadersMiddleware>();
-
-        smartHomeApplication.UseAuthentication();
-        smartHomeApplication.UseAuthorization();
-    }
-
-    private static void ConfigureRoutingAndEndpoints(WebApplication smartHomeApplication)
-    {
-        smartHomeApplication.MapHub<SmartDeviceStatusHub>("/hubs/device-status");
-        smartHomeApplication.MapHub<EnergyMonitoringHub>("/hubs/energy-monitoring");
-        smartHomeApplication.MapHub<SystemNotificationHub>("/hubs/notifications");
-        smartHomeApplication.MapHub<MaintenanceAlertHub>("/hubs/maintenance-alerts");
-
-        smartHomeApplication.MapControllers().RequireRateLimiting("StandardApiLimiter");
-
-        smartHomeApplication.MapHealthChecks("/health/ready");
-        smartHomeApplication.MapHealthChecks("/health/live");
-        smartHomeApplication.MapHealthChecks("/health/detailed").RequireAuthorization("AdminAccess");
-
-        ConfigureMinimalApiEndpoints(smartHomeApplication);
-    }
-
-    private static void ConfigureMinimalApiEndpoints(WebApplication smartHomeApplication)
-    {
-        smartHomeApplication.MapPost("/api/v2/devices/telemetry", HandleDeviceTelemetrySubmission)
-            .RequireAuthorization("DeviceAccess")
-            .RequireRateLimiting("DeviceTelemetryLimiter")
-            .WithTags("Device Telemetry")
-            .WithOpenApi();
-
-        smartHomeApplication.MapGet("/api/v2/system/status", GetSystemStatus)
-            .RequireAuthorization("UserAccess")
-            .WithTags("System Information")
-            .WithOpenApi();
-    }
-
-    private static async Task<IResult> HandleDeviceTelemetrySubmission(
-        DeviceTelemetryRequest telemetryRequest,
-        ISmartDeviceManager deviceManager,
-        ILogger<Program> applicationLogger)
-    {
-        try
-        {
-            await deviceManager.ProcessTelemetryDataAsync(telemetryRequest);
-            applicationLogger.LogInformation("Telemetry data processed successfully for device {DeviceId}", telemetryRequest.DeviceId);
-            return Results.Accepted();
-        }
-        catch (ArgumentException argumentException)
-        {
-            applicationLogger.LogWarning(argumentException, "Invalid telemetry data received for device {DeviceId}", telemetryRequest.DeviceId);
-            return Results.BadRequest("Invalid telemetry data format");
-        }
-        catch (Exception processingException)
-        {
-            applicationLogger.LogError(processingException, "Failed to process telemetry data for device {DeviceId}", telemetryRequest.DeviceId);
-            return Results.Problem("Failed to process telemetry data");
-        }
-    }
-
-    private static async Task<IResult> GetSystemStatus(
-        IServiceProvider serviceProvider,
-        ILogger<Program> applicationLogger)
-    {
-        try
-        {
-            var systemStatus = new
-            {
-                Timestamp = DateTime.UtcNow,
-                ApplicationName = "NexusHome IoT Platform",
-                Version = "v2.1.0",
-                Environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development",
-                MemoryUsage = $"{GC.GetTotalMemory(false) / (1024 * 1024)} MB",
-                Status = "Healthy"
-            };
-
-            return Results.Ok(systemStatus);
-        }
-        catch (Exception systemException)
-        {
-            applicationLogger.LogError(systemException, "Failed to retrieve system status");
-            return Results.Problem("Unable to retrieve system status");
-        }
-    }
-
-    private static async Task InitializeApplicationDatabase(WebApplication smartHomeApplication)
-    {
-        try
-        {
-            using var serviceScope = smartHomeApplication.Services.CreateScope();
-            var databaseContext = serviceScope.ServiceProvider.GetRequiredService<SmartHomeDbContext>();
-            var applicationLogger = serviceScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-
-            applicationLogger.LogInformation("Starting database initialization process");
-
-            await databaseContext.Database.MigrateAsync();
-            await DatabaseSeeder.SeedDevelopmentDataAsync(databaseContext, serviceScope.ServiceProvider, applicationLogger);
-
-            applicationLogger.LogInformation("Database initialization completed successfully");
-        }
-        catch (Exception databaseException)
-        {
-            var fallbackLogger = smartHomeApplication.Services.GetRequiredService<ILogger<Program>>();
-            fallbackLogger.LogError(databaseException, "Database initialization failed critically");
-            throw;
-        }
+        // A database that is not reachable yet should not prevent the API from
+        // serving liveness probes while the orchestrator retries dependencies.
+        logger.LogError(exception, "Database initialization failed");
     }
 }
 
-public record DeviceTelemetryRequest(
-    string DeviceId,
-    Dictionary<string, object> SensorData,
-    DateTime Timestamp);
+/// <summary>
+/// Exposed so <c>WebApplicationFactory&lt;Program&gt;</c> can bootstrap the
+/// application in integration tests.
+/// </summary>
+public partial class Program;

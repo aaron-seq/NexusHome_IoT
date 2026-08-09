@@ -37,18 +37,21 @@ public class AutomationController : ControllerBase
     {
         try
         {
+            // Priority, Condition and Action are the mapped columns; the
+            // PriorityLevel/TriggerCondition/ActionCommand aliases are
+            // [NotMapped] and cannot be translated to SQL.
             var rules = await _context.AutomationRules
                 .AsNoTracking()
-                .OrderByDescending(r => r.PriorityLevel)
+                .OrderByDescending(r => r.Priority)
                 .Select(r => new AutomationRuleDto
                 {
                     Id = r.Id,
                     Name = r.RuleName,
                     Description = r.Description,
                     IsEnabled = r.IsActive,
-                    TriggerCondition = r.TriggerCondition,
-                    ActionCommand = r.ActionCommand,
-                    Priority = r.PriorityLevel,
+                    TriggerCondition = r.Condition,
+                    ActionCommand = r.Action,
+                    Priority = r.Priority,
                     CreatedAt = r.CreatedAt,
                     LastExecuted = r.LastExecutionTimestamp
                 })

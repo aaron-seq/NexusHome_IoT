@@ -1,89 +1,69 @@
-.PHONY: help build test clean dev docker-up docker-down format lint restore migrate
+.PHONY: help restore build test run clean docker-up docker-down docker-logs format lint audit smoke
 
-# Variables
-PROJECT = NexusHome.IoT
-DOCKER_COMPOSE = docker-compose
+SOLUTION      = NexusHome.IoT.sln
+PROJECT       = NexusHome.IoT.csproj
+DOCKER_COMPOSE = docker compose
 
 help:
 	@echo "NexusHome IoT - Available Commands:"
-	@echo "  make build       - Build the application"
-	@echo "  make test        - Run all tests"
-	@echo "  make clean       - Clean build artifacts"
-	@echo "  make dev         - Start development server"
-	@echo "  make docker-up   - Start Docker services"
-	@echo "  make docker-down - Stop Docker services"
-	@echo "  make format      - Format code"
-	@echo "  make lint        - Lint code"
 	@echo "  make restore     - Restore NuGet packages"
-	@echo "  make migrate     - Run database migrations"
+	@echo "  make build       - Build the solution (Release)"
+	@echo "  make test        - Run the test suite"
+	@echo "  make run         - Run the API locally (SQLite, no external services)"
+	@echo "  make smoke       - Build and probe the health endpoint"
+	@echo "  make audit       - Report known vulnerable NuGet packages"
+	@echo "  make clean       - Remove build artifacts"
+	@echo "  make docker-up   - Start the full stack"
+	@echo "  make docker-down - Stop the stack"
+	@echo "  make docker-logs - Follow stack logs"
+	@echo "  make format      - Format code"
+	@echo "  make lint        - Verify formatting"
 
 restore:
-	@echo "Restoring NuGet packages..."
-	dotnet restore
+	dotnet restore $(SOLUTION)
 
 build: restore
-	@echo "Building project..."
-	dotnet build --configuration Release
+	dotnet build $(SOLUTION) --configuration Release --no-restore
 
-test:
-	@echo "Running tests..."
-	dotnet test --configuration Release --logger "console;verbosity=detailed"
+test: build
+	dotnet test $(SOLUTION) --configuration Release --no-build
+
+# Development uses SQLite and needs no database, Redis or MQTT broker running.
+run:
+	ASPNETCORE_ENVIRONMENT=Development dotnet run --project $(PROJECT)
+
+smoke: build
+	@echo "Starting the API and probing /health/live..."
+	@ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://127.0.0.1:5080 \
+		dotnet run --project $(PROJECT) --no-build & \
+	APP_PID=$$!; \
+	for i in $$(seq 1 30); do \
+		sleep 2; \
+		if curl -fsS http://127.0.0.1:5080/health/live > /dev/null 2>&1; then \
+			echo "OK: application is live"; kill $$APP_PID; exit 0; \
+		fi; \
+	done; \
+	echo "FAILED: application did not become healthy"; kill $$APP_PID; exit 1
+
+audit: restore
+	dotnet list $(SOLUTION) package --vulnerable --include-transitive
 
 clean:
-	@echo "Cleaning build artifacts..."
-	dotnet clean
-	rm -rf bin/ obj/ TestResults/ coverage/
-
-dev:
-	@echo "Starting development server..."
-	dotnet watch run --project $(PROJECT).csproj
+	dotnet clean $(SOLUTION) || true
+	rm -rf bin/ obj/ Tests/bin/ Tests/obj/ TestResults/ coverage/ *.db
 
 docker-up:
-	@echo "Starting Docker services..."
-	$(DOCKER_COMPOSE) up -d
-	@echo "Waiting for services to be healthy..."
-	sleep 10
+	$(DOCKER_COMPOSE) up -d --build
 	$(DOCKER_COMPOSE) ps
 
 docker-down:
-	@echo "Stopping Docker services..."
 	$(DOCKER_COMPOSE) down
 
 docker-logs:
-	@echo "Showing Docker logs..."
 	$(DOCKER_COMPOSE) logs -f
 
 format:
-	@echo "Formatting code..."
-	dotnet format
+	dotnet format $(SOLUTION)
 
 lint:
-	@echo "Checking code format..."
-	dotnet format --verify-no-changes
-
-migrate:
-	@echo "Running database migrations..."
-	dotnet ef database update
-
-migrate-reset:
-	@echo "Resetting database..."
-	dotnet ef database drop -f
-	dotnet ef database update
-
-db-seed:
-	@echo "Seeding database..."
-	dotnet run -- --seed
-
-watch-test:
-	@echo "Running tests in watch mode..."
-	dotnet watch test
-
-install-tools:
-	@echo "Installing development tools..."
-	dotnet tool install --global dotnet-ef
-	dotnet tool install --global dotnet-format
-
-update-tools:
-	@echo "Updating development tools..."
-	dotnet tool update --global dotnet-ef
-	dotnet tool update --global dotnet-format
+	dotnet format $(SOLUTION) --verify-no-changes

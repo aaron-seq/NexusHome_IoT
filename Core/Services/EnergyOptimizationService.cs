@@ -27,10 +27,12 @@ public class EnergyOptimizationService : IEnergyOptimizationService
         IMqttClientService mqttService,
         IConfiguration configuration)
     {
-        _serviceProvider = serviceProvider;
-        _logger = logger;
-        _mqttService = mqttService;
-        _configuration = configuration;
+        // Fail fast at composition time rather than with a NullReferenceException
+        // on the first background optimization pass.
+        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _mqttService = mqttService ?? throw new ArgumentNullException(nameof(mqttService));
+        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
 
         // Load energy rates and time periods from configuration
         // Using safe defaults if config is missing
@@ -227,8 +229,10 @@ public class EnergyOptimizationService : IEnergyOptimizationService
 
     private async Task<List<WeatherData>> GetWeatherForecastAsync(SmartHomeDbContext context, DateTime start, DateTime end)
     {
+        // RecordedAt is the mapped column; the Timestamp alias is [NotMapped]
+        // and cannot be translated to SQL.
         return await context.WeatherData
-            .Where(w => w.Timestamp >= start && w.Timestamp <= end)
+            .Where(w => w.RecordedAt >= start && w.RecordedAt <= end)
             .ToListAsync();
     }
 

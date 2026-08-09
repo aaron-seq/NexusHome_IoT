@@ -42,25 +42,46 @@ public class EnergyController : ControllerBase
             var startDate = from ?? DateTime.UtcNow.AddDays(-30);
             var endDate = to ?? DateTime.UtcNow;
 
-            var energyData = await _context.EnergyConsumptions
+            // Aggregation runs in the database; materialising every reading in
+            // the window would grow linearly with device count and retention.
+            var readingsInPeriod = _context.EnergyConsumptions
                 .AsNoTracking()
-                .Include(e => e.Device)
-                .Where(e => e.MeasurementTimestamp >= startDate && e.MeasurementTimestamp <= endDate)
+                .Where(e => e.MeasurementTimestamp >= startDate && e.MeasurementTimestamp <= endDate);
+
+            // Nullable projection so the aggregates return null instead of
+            // throwing when the period contains no readings.
+            var consumptionValues = readingsInPeriod.Select(e => (decimal?)e.PowerConsumptionKilowattHours);
+            var totalConsumption = await consumptionValues.SumAsync() ?? 0m;
+            var avgConsumption = await consumptionValues.AverageAsync() ?? 0m;
+
+            var peakRecord = await readingsInPeriod
+                .OrderByDescending(e => e.PowerConsumptionKilowattHours)
+                .Select(e => new { e.PowerConsumptionKilowattHours, e.MeasurementTimestamp })
+                .FirstOrDefaultAsync();
+
+            // Device breakdown. SmartHomeDevice is the mapped navigation; the
+            // Device alias is [NotMapped] and cannot be translated to SQL.
+            var deviceTotals = await readingsInPeriod
+                .GroupBy(e => new
+                {
+                    e.SmartHomeDevice.DeviceFriendlyName,
+                    e.SmartHomeDevice.UniqueDeviceIdentifier
+                })
+                .Select(g => new
+                {
+                    g.Key.DeviceFriendlyName,
+                    g.Key.UniqueDeviceIdentifier,
+                    Consumption = g.Sum(e => e.PowerConsumptionKilowattHours)
+                })
                 .ToListAsync();
 
-            var totalConsumption = energyData.Sum(e => e.PowerConsumptionKilowattHours);
-            var avgConsumption = energyData.Any() ? energyData.Average(e => e.PowerConsumptionKilowattHours) : 0;
-            var peakRecord = energyData.OrderByDescending(e => e.PowerConsumptionKilowattHours).FirstOrDefault();
-
-            // Device breakdown
-            var deviceBreakdown = energyData
-                .GroupBy(e => new { e.Device.Id, e.Device.DeviceFriendlyName, e.Device.UniqueDeviceIdentifier })
-                .Select(g => new DeviceConsumptionBreakdown
+            var deviceBreakdown = deviceTotals
+                .Select(d => new DeviceConsumptionBreakdown
                 {
-                    DeviceId = g.Key.UniqueDeviceIdentifier,
-                    DeviceName = g.Key.DeviceFriendlyName,
-                    Consumption = g.Sum(e => e.PowerConsumptionKilowattHours),
-                    Percentage = totalConsumption > 0 ? (g.Sum(e => e.PowerConsumptionKilowattHours) / totalConsumption) * 100 : 0
+                    DeviceId = d.UniqueDeviceIdentifier,
+                    DeviceName = d.DeviceFriendlyName,
+                    Consumption = d.Consumption,
+                    Percentage = totalConsumption > 0 ? (d.Consumption / totalConsumption) * 100 : 0
                 })
                 .OrderByDescending(d => d.Consumption)
                 .ToList();

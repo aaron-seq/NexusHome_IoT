@@ -411,10 +411,13 @@ public class ColorControlClusterHandlerTests
         // Act
         var (r, g, b) = _handler.GetRgb();
 
-        // Assert - Allow some variance due to color space conversion
-        r.Should().BeInRange(180, 255);
-        g.Should().BeInRange(80, 120);
-        b.Should().BeInRange(30, 80);
+        // The Matter Color Control cluster stores hue and saturation only;
+        // brightness belongs to the Level Control cluster. A round trip
+        // therefore preserves the hue ratio but normalises to full value, so
+        // 200:100:50 comes back as approximately 255:128:64.
+        r.Should().BeInRange(240, 255);
+        g.Should().BeInRange(110, 140);
+        b.Should().BeInRange(50, 80);
     }
 
     [Fact]
