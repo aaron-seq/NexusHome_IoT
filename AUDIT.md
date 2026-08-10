@@ -23,6 +23,7 @@ Linux, SQLite provider, `ASPNETCORE_ENVIRONMENT=Development`.
 | Committed build-log files | 18 (~530 KB) | 0 |
 | Secrets in source control | JWT key, MQTT password, `.env.dev` | None |
 | Canonical build entry point | None (no solution) | `NexusHome.IoT.sln` |
+| EF Core migrations | None — schema never created | `InitialCreate`, 12 tables, 11 indices |
 
 ---
 
@@ -121,13 +122,24 @@ cause the orchestrator to kill a healthy container) and `/health/ready`
 
 ### 6. The database schema was never created
 
-The repository contains **no EF Core migrations**. The compiled entry point
+The repository contained **no EF Core migrations**. The compiled entry point
 called neither `Migrate()` nor `EnsureCreated()`, so tables never existed and
 every query failed.
 
-**Fix.** Startup applies migrations when present and otherwise falls back to
-`EnsureCreatedAsync`, then seeds. Failures are logged without preventing the
-process from serving liveness probes while dependencies come up.
+**Fix.** An `InitialCreate` migration is now committed, generated against SQL
+Server via a new `SmartHomeDbContextFactory` design-time factory (needed because
+the provider is selected from configuration and the committed connection strings
+are empty). Startup applies migrations on SQL Server and creates the schema from
+the model on the SQLite/InMemory development providers, then seeds. Failures are
+logged without preventing the process from serving liveness probes while
+dependencies come up.
+
+Authoring the migration also surfaced two columns with no configured precision:
+`WeatherData.Temperature` and `Humidity` would have silently fallen back to
+`decimal(18,2)`. Both are now explicitly `decimal(5,2)`. The remaining decimal
+columns already carried precision through data annotations — energy readings are
+`decimal(12,4)`, which preserves the five-significant-figure kWh values the
+seeder produces.
 
 ### 7. The test suite had never run
 
@@ -350,9 +362,12 @@ absent, which is expected without the compose stack.
 
 These are deliberately left open rather than silently patched.
 
-1. **No EF Core migrations.** Startup uses `EnsureCreated`, which cannot evolve a
-   schema. An initial migration should be authored before any production
-   deployment carrying data. This is the single most important follow-up.
+1. **Migrations exist only for SQL Server.** An `InitialCreate` migration is now
+   committed (12 tables, 11 indices) and is applied automatically when the
+   provider is SQL Server. The SQLite and InMemory development providers still
+   use `EnsureCreated`, because the generated SQL is provider-specific — adding
+   a second provider to the deployment set would require either a second
+   migrations assembly or provider-conditional model configuration.
 
 2. **20 tests are skipped, each with a reason string.** Sixteen in
    `SmartDevicesControllerIntegrationTests` specify an API that
@@ -369,11 +384,13 @@ These are deliberately left open rather than silently patched.
    Shortening the production default is a behavioural change that should be made
    deliberately alongside implementing refresh tokens.
 
-4. **78 build warnings remain**, dominated by 24 `CS8618` (non-nullable field
+4. **Build warnings remain**, dominated by 24 `CS8618` (non-nullable field
    uninitialised), 24 `CS1998` (async method without await), 8 `CS0067` (unused
-   event), 6 `CS4014` (unawaited task) and 6 `ASP0019` (header assignment that
-   can throw). The `CS4014` instances are worth reviewing first — an unawaited
-   task in a background service silently swallows exceptions.
+   event) and 6 `ASP0019` (header assignment that can throw). The six `CS4014`
+   unawaited-task warnings have been fixed: `OnOffClusterHandler.TurnOn/TurnOff/
+   Toggle` were `void` wrappers that discarded an async command, so a failure to
+   reach the device surfaced nowhere. They are now `TurnOnAsync`/`TurnOffAsync`/
+   `ToggleAsync` returning the task. They had no callers, so nothing broke.
 
 5. **`AI/PredictiveMaintenanceService` and `Core/Services/PredictiveMaintenanceService`
    are two different types implementing two different `IPredictiveMaintenanceService`

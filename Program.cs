@@ -369,15 +369,21 @@ static async Task InitializeDatabaseAsync(WebApplication app)
     {
         var context = services.GetRequiredService<SmartHomeDbContext>();
 
-        // The project has no EF migrations yet; EnsureCreated keeps local and
-        // container runs working until an initial migration is authored.
-        if (context.Database.IsRelational() && context.Database.GetMigrations().Any())
+        // Migrations are authored against SQL Server, so the generated SQL is
+        // provider-specific. The SQLite and InMemory development providers
+        // create their schema from the model instead.
+        var isSqlServer = context.Database.ProviderName == "Microsoft.EntityFrameworkCore.SqlServer";
+
+        if (isSqlServer && context.Database.GetMigrations().Any())
         {
             await context.Database.MigrateAsync();
+            logger.LogInformation("Applied database migrations");
         }
         else
         {
             await context.Database.EnsureCreatedAsync();
+            logger.LogInformation("Created database schema from the model ({Provider})",
+                context.Database.ProviderName);
         }
 
         await DatabaseSeeder.SeedAsync(context, services, logger, app.Environment);

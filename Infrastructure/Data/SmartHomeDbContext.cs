@@ -53,6 +53,16 @@ namespace NexusHome.IoT.Infrastructure.Data
                 entity.HasIndex(alert => new { alert.SmartHomeDeviceId, alert.CreatedAt });
             });
 
+            // Every other decimal carries precision via data annotations. Without
+            // these two the provider falls back to decimal(18,2), which records
+            // the intent by accident rather than on purpose.
+            modelBuilder.Entity<WeatherData>(entity =>
+            {
+                entity.Property(weather => weather.Temperature).HasPrecision(5, 2);
+                entity.Property(weather => weather.Humidity).HasPrecision(5, 2);
+                entity.HasIndex(weather => weather.RecordedAt);
+            });
+
             ConfigureSqliteDecimalSupport(modelBuilder);
         }
 

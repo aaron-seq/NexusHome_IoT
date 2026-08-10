@@ -239,6 +239,11 @@ make test    # dotnet test  NexusHome.IoT.sln -c Release
 make audit   # report known vulnerable NuGet packages
 ```
 
+Database schema is provisioned automatically at startup: EF Core migrations are
+applied when the provider is SQL Server, and the SQLite/InMemory development
+providers create the schema from the model. See `SETUP.md` for authoring
+migrations.
+
 `NexusHome.IoT.sln` is the canonical build entry point — building the web
 project alone silently skips the test project.
 

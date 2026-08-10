@@ -118,14 +118,22 @@ make lint
 
 ### Database Operations
 
-```bash
-# The project has no EF Core migrations yet. Startup calls EnsureCreated,
-# which creates the schema but cannot evolve it. Author an initial migration
-# before deploying anywhere that holds real data:
-dotnet tool install --global dotnet-ef
-dotnet ef migrations add InitialCreate
-dotnet ef database update
+Migrations are authored against SQL Server and are applied automatically at
+startup when that provider is selected. The SQLite and InMemory development
+providers create the schema from the model instead, because the generated SQL
+is provider-specific.
 
+```bash
+dotnet tool install --global dotnet-ef
+
+# Add a migration after changing the model
+dotnet ef migrations add <Name> --output-dir Infrastructure/Data/Migrations
+
+# Apply to a database explicitly (startup does this for you on SQL Server)
+ConnectionStrings__DefaultConnection="<connection string>" dotnet ef database update
+
+# Produce a script for a reviewed/manual deployment
+dotnet ef migrations script --idempotent -o schema.sql
 ```
 
 ### Docker Operations
