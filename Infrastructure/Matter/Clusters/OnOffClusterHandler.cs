@@ -142,11 +142,22 @@ public class OnOffClusterHandler : ClusterHandlerBase
         new() { CommandId = CMD_ON_WITH_TIMED_OFF, Name = "OnWithTimedOff" },
     };
 
-    // Public API for direct access
+    // Public API for direct access.
+    //
+    // These return the pending task rather than discarding it: the previous
+    // void signatures dropped the result of an async command, so a failure to
+    // reach the device surfaced nowhere and callers could not tell when the
+    // command had actually been applied.
     public bool IsOn => _isOn;
-    public void TurnOn() => HandleCommandAsync(CMD_ON, null);
-    public void TurnOff() => HandleCommandAsync(CMD_OFF, null);
-    public void Toggle() => HandleCommandAsync(CMD_TOGGLE, null);
+
+    public Task<ClusterCommandResult> TurnOnAsync(CancellationToken cancellationToken = default)
+        => HandleCommandAsync(CMD_ON, null, cancellationToken);
+
+    public Task<ClusterCommandResult> TurnOffAsync(CancellationToken cancellationToken = default)
+        => HandleCommandAsync(CMD_OFF, null, cancellationToken);
+
+    public Task<ClusterCommandResult> ToggleAsync(CancellationToken cancellationToken = default)
+        => HandleCommandAsync(CMD_TOGGLE, null, cancellationToken);
 }
 
 public enum StartUpOnOffEnum : byte

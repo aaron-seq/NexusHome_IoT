@@ -14,13 +14,36 @@ namespace NexusHome.IoT.Core.Services;
 public class DeviceShadowService
 {
     private readonly ILogger<DeviceShadowService> _logger;
-    private readonly IConnectionMultiplexer _redis;
+    private readonly IConnectionMultiplexer? _redis;
     private const string KeyPrefix = "device:shadow:";
 
-    public DeviceShadowService(ILogger<DeviceShadowService> logger, IConnectionMultiplexer redis)
+    /// <summary>
+    /// Creates the shadow service. <paramref name="redis"/> is optional so the
+    /// platform still starts when no Redis backplane is configured (local
+    /// development); shadow persistence is disabled in that case.
+    /// </summary>
+    public DeviceShadowService(ILogger<DeviceShadowService> logger, IConnectionMultiplexer? redis = null)
     {
         _logger = logger;
         _redis = redis;
+    }
+
+    /// <summary>
+    /// Whether shadow state can be persisted. False when Redis is not configured.
+    /// </summary>
+    public bool IsPersistenceEnabled => _redis is not null;
+
+    private IDatabase? TryGetDatabase(string operation, string deviceId)
+    {
+        if (_redis is null)
+        {
+            _logger.LogWarning(
+                "Device shadow persistence is disabled (no Redis configured); skipping {Operation} for {DeviceId}",
+                operation, deviceId);
+            return null;
+        }
+
+        return _redis.GetDatabase();
     }
 
     /// <summary>
@@ -28,9 +51,14 @@ public class DeviceShadowService
     /// </summary>
     public async Task UpdateReportedStateAsync(string deviceId, Dictionary<string, object> properties)
     {
-        var db = _redis.GetDatabase();
+        var db = TryGetDatabase(nameof(UpdateReportedStateAsync), deviceId);
+        if (db is null)
+        {
+            return;
+        }
+
         var key = $"{KeyPrefix}{deviceId}";
-        
+
         // We store reported properties in a Hash field "reported"
         var json = JsonSerializer.Serialize(properties);
         await db.HashSetAsync(key, "reported", json);
@@ -44,7 +72,12 @@ public class DeviceShadowService
     /// </summary>
     public async Task UpdateDesiredStateAsync(string deviceId, Dictionary<string, object> properties)
     {
-        var db = _redis.GetDatabase();
+        var db = TryGetDatabase(nameof(UpdateDesiredStateAsync), deviceId);
+        if (db is null)
+        {
+            return;
+        }
+
         var key = $"{KeyPrefix}{deviceId}";
 
         var json = JsonSerializer.Serialize(properties);
@@ -58,7 +91,12 @@ public class DeviceShadowService
     /// </summary>
     public async Task<(Dictionary<string, object> Reported, Dictionary<string, object> Desired)> GetShadowAsync(string deviceId)
     {
-        var db = _redis.GetDatabase();
+        var db = TryGetDatabase(nameof(GetShadowAsync), deviceId);
+        if (db is null)
+        {
+            return (new Dictionary<string, object>(), new Dictionary<string, object>());
+        }
+
         var key = $"{KeyPrefix}{deviceId}";
 
         var reportedJson = await db.HashGetAsync(key, "reported");

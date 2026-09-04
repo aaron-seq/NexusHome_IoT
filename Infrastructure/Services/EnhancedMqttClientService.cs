@@ -30,6 +30,8 @@ public class EnhancedMqttClientService : IMqttClientService, IDisposable
         ILogger<EnhancedMqttClientService> logger,
         IOptions<MqttBrokerSettings> mqttConfiguration)
     {
+        ArgumentNullException.ThrowIfNull(mqttConfiguration);
+
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _mqttConfiguration = mqttConfiguration.Value ?? throw new ArgumentNullException(nameof(mqttConfiguration));
         _subscriptionHandlers = new ConcurrentDictionary<string, Func<string, string, Task>>();
@@ -169,13 +171,16 @@ public class EnhancedMqttClientService : IMqttClientService, IDisposable
     public async Task PublishAsync(string topicName, string messagePayload, int qualityOfService = 1, 
                                   bool retainMessage = false, CancellationToken cancellationToken = default)
     {
-        ValidateConnectionState();
+        // Argument validation precedes the state check so a caller passing a
+        // bad topic gets that error rather than a misleading "not connected".
         ValidateTopicName(topicName);
-        
-        if (string.IsNullOrEmpty(messagePayload))
+
+        if (string.IsNullOrWhiteSpace(messagePayload))
         {
             throw new ArgumentException("Message payload cannot be null or empty", nameof(messagePayload));
         }
+
+        ValidateConnectionState();
 
         try
         {
@@ -208,13 +213,14 @@ public class EnhancedMqttClientService : IMqttClientService, IDisposable
     public async Task SubscribeAsync(string topicPattern, Func<string, string, Task> messageHandler, 
                                     int qualityOfService = 1, CancellationToken cancellationToken = default)
     {
-        ValidateConnectionState();
         ValidateTopicName(topicPattern);
-        
+
         if (messageHandler == null)
         {
             throw new ArgumentNullException(nameof(messageHandler));
         }
+
+        ValidateConnectionState();
 
         try
         {
@@ -507,7 +513,9 @@ public class EnhancedMqttClientService : IMqttClientService, IDisposable
 
     private static void ValidateTopicName(string topicName)
     {
-        if (string.IsNullOrEmpty(topicName))
+        // Whitespace-only topics are accepted by the broker but are never what
+        // the caller intended, so reject them alongside null and empty.
+        if (string.IsNullOrWhiteSpace(topicName))
         {
             throw new ArgumentException("Topic name cannot be null or empty", nameof(topicName));
         }

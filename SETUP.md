@@ -49,25 +49,20 @@ cp .env.example .env
 make docker-up
 
 # Or manually:
-docker-compose up -d
+docker compose up -d
 
 # Check service health
-docker-compose ps
+docker compose ps
 ```
 
 Wait for all services to show "healthy" status (may take 30-60 seconds).
 
-### 4. Run Database Migrations
+### 4. Database setup
 
-```bash
-# Install EF Core tools (first time only)
-make install-tools
-
-# Run migrations
-make migrate
-
-# The database will be automatically seeded with demo data
-```
+No manual step is required. On startup the application creates the schema and
+seeds demo devices, energy readings, automation rules and a development
+administrator account. See "Database Operations" below before deploying to an
+environment that holds real data.
 
 ### 5. Start the Application
 
@@ -105,10 +100,10 @@ Open your browser and navigate to:
 make test
 
 # Run tests in watch mode
-make watch-test
+dotnet watch test --project Tests/NexusHome.IoT.Tests.csproj
 
 # Run tests with coverage
-dotnet test --collect:"XPlat Code Coverage"
+dotnet test NexusHome.IoT.sln --collect:"XPlat Code Coverage"
 ```
 
 ### Code Formatting
@@ -123,18 +118,22 @@ make lint
 
 ### Database Operations
 
+Migrations are authored against SQL Server and are applied automatically at
+startup when that provider is selected. The SQLite and InMemory development
+providers create the schema from the model instead, because the generated SQL
+is provider-specific.
+
 ```bash
-# Create a new migration
-dotnet ef migrations add MigrationName
+dotnet tool install --global dotnet-ef
 
-# Update database
-make migrate
+# Add a migration after changing the model
+dotnet ef migrations add <Name> --output-dir Infrastructure/Data/Migrations
 
-# Reset database (WARNING: deletes all data)
-make migrate-reset
+# Apply to a database explicitly (startup does this for you on SQL Server)
+ConnectionStrings__DefaultConnection="<connection string>" dotnet ef database update
 
-# Seed database manually
-make db-seed
+# Produce a script for a reviewed/manual deployment
+dotnet ef migrations script --idempotent -o schema.sql
 ```
 
 ### Docker Operations
@@ -150,7 +149,7 @@ make docker-down
 make docker-logs
 
 # Rebuild and restart
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ## Configuration
@@ -275,10 +274,10 @@ mosquitto_sub -h localhost -t "nexushome/#" -v -u nexususer -P "$MQTT_PASSWORD"
 
 ```bash
 # Remove all containers and volumes (WARNING: deletes data)
-docker-compose down -v
+docker compose down -v
 
 # Rebuild images from scratch
-docker-compose build --no-cache
+docker compose build --no-cache
 
 # Check disk space
 docker system df

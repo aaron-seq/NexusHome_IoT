@@ -1,0 +1,31 @@
+# Keep the build context small and prevent host build output from leaking into
+# the image (which would also invalidate the restore layer on every build).
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/.git/
+**/.github/
+**/TestResults/
+**/coverage*
+**/node_modules/
+
+Tests/
+NexusHome.Web/
+NexusHome.WebApp/
+NexusHome.DeviceSimulator/
+
+**/*.user
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/logs/
+*.log
+
+.env
+.env.*
+!.env.example
+
+Dockerfile*
+docker-compose*.yml
+*.md

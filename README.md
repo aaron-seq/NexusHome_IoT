@@ -7,7 +7,6 @@
 [![Docker Ready](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 [![SignalR](https://img.shields.io/badge/SignalR-Real--time-green.svg)](https://dotnet.microsoft.com/apps/aspnet/signalr)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#)
-[![Code Coverage](https://img.shields.io/badge/coverage-85%25-green.svg)](#)
 
 **Advanced IoT Smart Home Energy Management System**
 
@@ -117,7 +116,7 @@ The platform supports multi-protocol device communication (MQTT, HTTP, CoAP, Mat
 - **MQTTnet** - High-performance MQTT client/server
 - **ML.NET** - Machine learning and predictive analytics
 - **Serilog** - Structured logging framework
-- **AutoMapper** - Object-object mapping
+- **BCrypt.Net** - Password hashing
 
 </td>
 </tr>
@@ -127,13 +126,11 @@ The platform supports multi-protocol device communication (MQTT, HTTP, CoAP, Mat
 
 - **SQL Server** - Primary relational database
 - **Redis** - High-performance caching and session storage
-- **InfluxDB** - Time-series data storage
+- **InfluxDB** - Time-series data storage (connection string reserved; not yet wired up)
 
 ### DevOps and Monitoring
 
 - **Docker & Docker Compose** - Containerized deployment
-- **Grafana** - Advanced data visualization
-- **Prometheus** - Metrics collection and monitoring
 - **GitHub Actions** - CI/CD automation
 
 ---
@@ -172,8 +169,7 @@ The platform follows a clean, layered architecture pattern:
 ### Key Design Patterns
 
 - **Clean Architecture** - Separation of concerns with dependency inversion
-- **Repository Pattern** - Data access abstraction
-- **CQRS** - Command Query Responsibility Segregation
+- **Options Pattern** - Strongly typed, validated configuration
 - **Event-Driven** - Asynchronous processing with background services
 - **Dependency Injection** - Loose coupling and testability
 
@@ -187,7 +183,7 @@ Before you begin, ensure you have:
 
 - [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop)
-- [SQL Server](https://www.microsoft.com/sql-server/sql-server-downloads) or SQL Server Express
+- [SQL Server](https://www.microsoft.com/sql-server/sql-server-downloads) (optional — only for the SQL Server provider; development defaults to SQLite)
 - [Git](https://git-scm.com/downloads)
 - IDE: Visual Studio 2022 or VS Code
 
@@ -200,66 +196,80 @@ git clone https://github.com/aaron-seq/NexusHome_IoT.git
 cd NexusHome_IoT
 ```
 
-2. **Setup environment**
+2. **Run the application**
+
+Development mode needs no database, Redis or MQTT broker. It uses a local
+SQLite file and seeds demo devices, energy readings and automation rules on
+first start.
 
 ```bash
-# Create necessary directories
-mkdir -p logs data uploads certificates
-
-# Copy configuration file
-cp appsettings.json appsettings.Development.json
+make run
+# or, without make:
+ASPNETCORE_ENVIRONMENT=Development dotnet run --project NexusHome.IoT.csproj
 ```
 
-3. **Configure database**
+3. **Access the application**
+
+| Endpoint | URL |
+| --- | --- |
+| API base | http://localhost:5000 |
+| Swagger UI | http://localhost:5000/swagger |
+| Liveness probe | http://localhost:5000/health/live |
+| Readiness probe | http://localhost:5000/health/ready |
+
+4. **Log in**
+
+Development seeds an administrator account and logs the credentials at
+startup (`admin` / `Admin123!`). Passwords are BCrypt hashed; this account is
+only created outside Production.
 
 ```bash
-# Install EF Core tools
-dotnet tool install --global dotnet-ef
+TOKEN=$(curl -s -X POST http://localhost:5000/api/v1/Auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"Admin123!"}' | jq -r .token)
 
-# Update connection string in appsettings.Development.json
-# Then create and apply migrations
-dotnet ef migrations add InitialCreate
-dotnet ef database update
+curl -H "Authorization: Bearer $TOKEN" http://localhost:5000/api/Energy/consumption
 ```
 
-4. **Run the application**
+5. **Build and test**
 
 ```bash
-# Restore dependencies
-dotnet restore
-
-# Build the project
-dotnet build
-
-# Run in development mode
-dotnet run
+make build   # dotnet build NexusHome.IoT.sln -c Release
+make test    # dotnet test  NexusHome.IoT.sln -c Release
+make audit   # report known vulnerable NuGet packages
 ```
 
-5. **Access the application**
+Database schema is provisioned automatically at startup: EF Core migrations are
+applied when the provider is SQL Server, and the SQLite/InMemory development
+providers create the schema from the model. See `SETUP.md` for authoring
+migrations.
 
-- Main Application: http://localhost:5000
-- API Documentation: http://localhost:5000/swagger
-- Health Check: http://localhost:5000/health
+`NexusHome.IoT.sln` is the canonical build entry point — building the web
+project alone silently skips the test project.
 
 ### Docker Deployment
 
-For a complete stack deployment:
+The full stack (SQL Server, Redis, Mosquitto) runs through Docker Compose.
+Copy `.env.example` to `.env` and fill in real values first; the application
+refuses to start outside Development unless `JwtAuthentication__SecretKey` is
+set to at least 32 characters.
 
 ```bash
-# Start all services
-docker-compose up -d
+cp .env.example .env
+$EDITOR .env
 
-# View logs
-docker-compose logs -f
-
-# Stop services
-docker-compose down
+docker compose up -d --build     # or: make docker-up
+docker compose logs -f           # or: make docker-logs
+docker compose down              # or: make docker-down
 ```
 
-Services will be available at:
-- Application: http://localhost:5000
-- Grafana: http://localhost:3000
-- Prometheus: http://localhost:9090
+For production, layer the production overlay on top:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+The application is published on http://localhost:5000 (container port 8080).
 
 ---
 
@@ -269,12 +279,21 @@ Services will be available at:
 
 Key configuration options:
 
+No secrets are committed to this repository. `appsettings.json` ships with
+empty credential values; supply real ones through environment variables or a
+secret store.
+
 ```bash
-# Database
+# Database. Provider selects the EF Core provider: SqlServer, Sqlite or InMemory.
+Database__Provider="SqlServer"
 ConnectionStrings__DefaultConnection="Server=localhost;Database=NexusHomeIoT;Trusted_Connection=true"
+
+# Optional. When empty, the Redis backplane, distributed cache and device
+# shadow persistence are disabled rather than failing startup.
 ConnectionStrings__Redis="localhost:6379"
 
-# Security
+# Security. Required outside Development; startup fails if shorter than 32
+# characters. Generate one with: openssl rand -base64 32
 JwtAuthentication__SecretKey="your-secret-key-min-32-characters"
 JwtAuthentication__Issuer="NexusHome.IoT"
 JwtAuthentication__Audience="NexusHome.Clients"
@@ -295,7 +314,7 @@ WeatherApi__BaseUrl="https://api.openweathermap.org/data/2.5"
 
 - **appsettings.json** - Base configuration
 - **appsettings.Development.json** - Development overrides
-- **appsettings.Production.json** - Production settings
+- **Environment variables** - Production settings (no Production appsettings file is committed)
 - **docker-compose.yml** - Docker service orchestration
 
 ---
