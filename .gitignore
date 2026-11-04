@@ -34,3 +34,7 @@ node_modules/
 
 # Docker
 Dockerfile-*cache
+
+# Reproducible Blazor compiler transcripts
+/NexusHome.Web/web_build_errors.txt
+/NexusHome.Web/web_build_utf8.txt

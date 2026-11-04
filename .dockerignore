@@ -29,3 +29,9 @@ NexusHome.DeviceSimulator/
 Dockerfile*
 docker-compose*.yml
 *.md
+
+# Local worktrees and persistent runtime data are not image inputs
+.claude/
+data/
+uploads/
+certificates/
