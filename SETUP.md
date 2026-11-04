@@ -1,336 +1,82 @@
-# NexusHome IoT - Local Development Setup
+# Setup and configuration
 
-This guide will help you set up the NexusHome IoT platform for local development.
-
-## Prerequisites
-
-- .NET 8.0 SDK or later
-- Docker and Docker Compose
-- SQL Server (or use Docker)
-- Redis (or use Docker)
-- MQTT Broker (or use Docker)
-- Git
-
-### Optional Tools
-
-- Visual Studio 2022 or VS Code
-- Azure Data Studio or SQL Server Management Studio
-- Redis CLI
-- MQTT Explorer
-
-## Quick Start
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/aaron-seq/NexusHome_IoT.git
-cd NexusHome_IoT
-```
-
-### 2. Configure Environment Variables
-
-```bash
-# Copy the example environment file
-cp .env.example .env
-
-# Edit .env and update the following REQUIRED values:
-# - SQLSERVER_SA_PASSWORD (strong password for SQL Server)
-# - REDIS_PASSWORD (password for Redis)
-# - JwtAuthentication__SecretKey (generate with: openssl rand -base64 32)
-# - MqttBroker__Password (password for MQTT broker)
-```
-
-**Important Security Note:** Never commit the `.env` file. It's already in `.gitignore`.
-
-### 3. Start Infrastructure Services
-
-```bash
-# Start all services using Docker Compose
-make docker-up
-
-# Or manually:
-docker compose up -d
-
-# Check service health
-docker compose ps
-```
-
-Wait for all services to show "healthy" status (may take 30-60 seconds).
-
-### 4. Database setup
-
-No manual step is required. On startup the application creates the schema and
-seeds demo devices, energy readings, automation rules and a development
-administrator account. See "Database Operations" below before deploying to an
-environment that holds real data.
-
-### 5. Start the Application
-
-```bash
-# Development mode with hot reload
-make dev
-
-# Or standard run:
-dotnet run
-```
-
-The application will start at `http://localhost:5000`
-
-### 6. Verify Installation
-
-Open your browser and navigate to:
-
-- **Swagger UI**: http://localhost:5000/swagger
-- **Health Check**: http://localhost:5000/health/ready
-- **API Status**: http://localhost:5000/api/v2/system/status
-
-## Default Credentials (Development Only)
-
-**WARNING**: These credentials are for DEVELOPMENT ONLY and must be changed in production.
-
-- **Username**: `admin`
-- **Password**: `Admin123!`
-
-## Development Workflow
-
-### Running Tests
-
-```bash
-# Run all tests
-make test
-
-# Run tests in watch mode
-dotnet watch test --project Tests/NexusHome.IoT.Tests.csproj
-
-# Run tests with coverage
-dotnet test NexusHome.IoT.sln --collect:"XPlat Code Coverage"
-```
-
-### Code Formatting
-
-```bash
-# Format code
-make format
-
-# Check formatting (CI uses this)
-make lint
-```
-
-### Database Operations
-
-Migrations are authored against SQL Server and are applied automatically at
-startup when that provider is selected. The SQLite and InMemory development
-providers create the schema from the model instead, because the generated SQL
-is provider-specific.
-
-```bash
-dotnet tool install --global dotnet-ef
-
-# Add a migration after changing the model
-dotnet ef migrations add <Name> --output-dir Infrastructure/Data/Migrations
-
-# Apply to a database explicitly (startup does this for you on SQL Server)
-ConnectionStrings__DefaultConnection="<connection string>" dotnet ef database update
-
-# Produce a script for a reviewed/manual deployment
-dotnet ef migrations script --idempotent -o schema.sql
-```
-
-### Docker Operations
-
-```bash
-# Start services
-make docker-up
-
-# Stop services
-make docker-down
-
-# View logs
-make docker-logs
-
-# Rebuild and restart
-docker compose up -d --build
-```
+Use the [README quickstart](README.md#quickstart) to restore, build, and start the API. The solution includes the API and tests; [NexusHome.Web](NexusHome.Web/NexusHome.Web.csproj) is a separate Blazor client outside that solution. Development defaults to local SQLite and demo data; Docker, SQL Server, Redis, and MQTT are optional for inspecting the API.
 
 ## Configuration
 
-### Environment Variables
+The API reads [appsettings.json](appsettings.json), environment-specific overrides, process environment variables, and command-line settings through [Program.cs](Program.cs). Double underscores select nested environment settings. `dotnet run` does **not** load `.env` files automatically; Docker Compose uses `.env` for interpolation and passes only variables listed in its service definition.
 
-All configuration is managed through environment variables. See `.env.example` for the complete list.
+| Setting | Purpose |
+| --- | --- |
+| `Database__Provider` | `SqlServer`, `Sqlite`, or `InMemory`; Development selects SQLite. |
+| `ConnectionStrings__DefaultConnection` | Provider-specific database connection string. Use `localhost` for host SQL Server and `sqlserver` inside Compose. |
+| `ConnectionStrings__Redis` | Optional Redis connection for device shadows and the SignalR backplane. Empty means local SignalR and disabled shadow persistence. |
+| `JwtAuthentication__SecretKey`, `Issuer`, `Audience`, `ExpirationMinutes` | Prefix each key with `JwtAuthentication__`. Supply a private signing key of at least 32 characters outside Development. |
+| `MqttBroker__Host`, `Port`, `Username`, `Password`, `UseTls` | Prefix each key with `MqttBroker__`; match the broker's authentication and transport. |
+| `Cors__AllowedOrigins` | Allowed browser origins; comma-separated values or indexed configuration entries. See [CorsOrigins](Infrastructure/Configuration/CorsOrigins.cs). |
+| `WeatherApi__ApiKey`, `BaseUrl`, `Location`, `Units` | Prefix each key with `WeatherApi__`. The current [weather provider](Infrastructure/Services/OpenWeatherMapProvider.cs) returns fixed sample data. |
 
-#### Required Variables
+For a disposable local API session with no database file:
 
-- `ConnectionStrings__DefaultConnection` - Database connection string
-- `SQLSERVER_SA_PASSWORD` - SQL Server SA password
-- `REDIS_PASSWORD` - Redis password
-- `JwtAuthentication__SecretKey` - JWT signing key (256-bit)
-- `MqttBroker__Password` - MQTT broker password
-
-#### Optional Variables
-
-- `WEATHER_API_KEY` - OpenWeatherMap API key
-- `Seq__ApiKey` - Seq logging API key
-- `CORS__AllowedOrigins` - Allowed CORS origins
-
-### Configuration Files
-
-- `appsettings.json` - Base configuration
-- `appsettings.Development.json` - Development overrides
-- `.env` - Environment-specific secrets (not committed)
-- `Configuration/mosquitto.conf` - MQTT broker settings
-
-## API Documentation
-
-### Available Endpoints
-
-#### Device Management
-
-- `GET /api/device` - List all devices
-- `GET /api/device/{deviceId}` - Get device details
-- `POST /api/device/{deviceId}/toggle` - Toggle device state
-- `POST /api/device/telemetry` - Submit telemetry data
-- `GET /api/device/{deviceId}/energy` - Get energy consumption
-
-#### Energy Analytics
-
-- `GET /api/energy/consumption` - Total consumption summary
-- `GET /api/energy/cost` - Cost analysis and breakdown
-- `GET /api/energy/forecast` - Energy usage predictions
-
-#### Automation
-
-- `GET /api/automation/rules` - List automation rules
-- `POST /api/automation/rules` - Create new rule
-- `GET /api/automation/rules/{id}` - Get rule details
-- `PUT /api/automation/rules/{id}` - Update rule
-- `DELETE /api/automation/rules/{id}` - Delete rule
-
-#### Health & Status
-
-- `GET /health/live` - Liveness probe
-- `GET /health/ready` - Readiness probe
-- `GET /api/v2/system/status` - System status
-
-### Authentication
-
-All API endpoints (except health checks) require JWT authentication.
-
-```bash
-# Example: Get JWT token (dev only)
-curl -X POST http://localhost:5000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"Admin123!"}'
-
-# Use token in subsequent requests
-curl -X GET http://localhost:5000/api/device \
-  -H "Authorization: Bearer YOUR_TOKEN_HERE"
+```sh
+dotnet run --project NexusHome.IoT.csproj --configuration Release --no-build --no-launch-profile -- --environment Development --urls http://localhost:5000 --Database:Provider InMemory
 ```
 
-## Troubleshooting
+For persistent local development, use the README command, which loads the SQLite development settings. Keep the resulting database and logs private. For host overrides, use process variables or initialize .NET user secrets for the API project. Keep secrets out of commits and terminal transcripts; see [SECURITY.md](SECURITY.md).
 
-### Database Connection Issues
+## First API use
 
-```bash
-# Check SQL Server is running
-docker ps | grep sqlserver
+Open [Swagger](http://localhost:5000/swagger), [liveness](http://localhost:5000/health/live), and [readiness](http://localhost:5000/health/ready). Development seeding creates `admin` / `Admin123!` if no users exist. These are public demo credentials: use them only in an isolated development environment and never expose that account publicly.
 
-# Check SQL Server logs
-docker logs nexushome-sqlserver
+Login with `POST /api/v1/Auth/login` and a JSON body containing `username` and `password`. Add the returned token to Swagger's authorization field or send `Authorization: Bearer <token>`. The [login handler](API/Controllers/AuthController.cs) verifies BCrypt hashes. Token refresh/session limitations remain ([#37](https://github.com/aaron-seq/NexusHome_IoT/issues/37)). See the [route table](docs/ARCHITECTURE.md#http-and-real-time-contracts) for the two API route families.
 
-# Test connection
-docker exec -it nexushome-sqlserver /opt/mssql-tools/bin/sqlcmd \
-  -S localhost -U sa -P "$SQLSERVER_SA_PASSWORD" -Q "SELECT 1"
+## Database provisioning
+
+[Program.cs](Program.cs) initializes the database before starting the listener: SQL Server applies the checked-in [migrations](Infrastructure/Data/Migrations), while SQLite and InMemory call `EnsureCreated`. [DatabaseSeeder](Infrastructure/Data/DatabaseSeeder.cs) inserts demo entities and only creates the demo administrator in Development. Initialization errors are logged; check readiness as well as liveness.
+
+`EnsureCreated` does not upgrade an existing SQLite schema. Review a provider-specific upgrade/backup plan before changing persisted models ([#40](https://github.com/aaron-seq/NexusHome_IoT/issues/40)). Do not reset databases or delete `.db` files as routine cleanup.
+
+For deliberate SQL Server schema work, install a `dotnet-ef` tool version matching the project's EF version and specify the target project:
+
+```sh
+dotnet ef migrations add MigrationName --project NexusHome.IoT.csproj --output-dir Infrastructure/Data/Migrations
+dotnet ef migrations script --idempotent --project NexusHome.IoT.csproj --output schema.sql
 ```
 
-### Redis Connection Issues
+Review generated SQL, back up existing data, and test migrations/rollback on a disposable database before deployment. Runtime startup currently applies SQL Server migrations automatically; account for that when coordinating production changes.
 
-```bash
-# Check Redis is running
-docker ps | grep redis
+## Dependency services and containers
 
-# Test Redis connection
-docker exec -it nexushome-redis redis-cli -a "$REDIS_PASSWORD" ping
+Docker Desktop must be running. Copy [.env.example](.env.example) to a local `.env`, replace placeholders, and ensure SQL/Redis credentials and connection strings agree. Container DNS names in `.env` are for the Compose network, not a host `dotnet run` process. [docker-compose.yml](docker-compose.yml) selects SQL Server explicitly and forwards the weather key from `WEATHER_API_KEY`.
+
+```sh
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps
+docker compose logs -f nexushome-app
+docker compose down
 ```
 
-### MQTT Connection Issues
+The API is available on host port 5000, with SQL Server on 1433, Redis on 6379, MQTT on 1883, and MQTT WebSockets on 9001. The broker mounts [Configuration/mosquitto.conf](Configuration/mosquitto.conf); it permits anonymous development access and must not be exposed publicly. Docker volumes preserve database, broker, logs, uploads, and application data. Avoid `down -v` or global pruning as troubleshooting shortcuts.
 
-```bash
-# Check MQTT broker is running
-docker ps | grep mqtt
+[Dockerfile](Dockerfile) builds only the API, includes `curl` for its `/health/live` probe, and runs as a non-root user on port 8080 with writable paths under `/app`. The separate Blazor client is not hosted by this image. To build the image alone:
 
-# Test MQTT connectivity
-mosquitto_pub -h localhost -t "nexushome/test" -m "Hello" -u nexususer -P "$MQTT_PASSWORD"
-mosquitto_sub -h localhost -t "nexushome/#" -v -u nexususer -P "$MQTT_PASSWORD"
+```sh
+docker build -t nexushome-iot:dev -f Dockerfile .
 ```
 
-### Application Won't Start
+## Blazor client
 
-1. Check all required environment variables are set
-2. Verify database migrations are up to date: `dotnet ef migrations list`
-3. Check logs: `docker logs nexushome-app`
-4. Verify port 5000 is not in use: `lsof -i :5000`
-
-### Docker Issues
-
-```bash
-# Remove all containers and volumes (WARNING: deletes data)
-docker compose down -v
-
-# Rebuild images from scratch
-docker compose build --no-cache
-
-# Check disk space
-docker system df
-
-# Prune unused resources
-docker system prune -a
+```sh
+dotnet run --project NexusHome.Web/NexusHome.Web.csproj --no-launch-profile -- --urls http://localhost:5179
 ```
 
-## Testing MQTT
+The API's default CORS allowlist permits `http://localhost:5179`. Both [ApiService](NexusHome.Web/Services/ApiService.cs) and [SignalRService](NexusHome.Web/Services/SignalRService.cs) read `ApiBaseUrl`, defaulting to `https://localhost:7000`. Configure a browser-delivered `ApiBaseUrl` for your API address; it is public client configuration, never a place for secrets.
 
-### Using Mosquitto CLI
+The client calls `/api/devices`, while the legacy controller uses `/api/Device`, and lacks a complete login/token flow. Some pages display sample data on failure. Running the UI is a preview, not evidence of live connectivity. Follow [#42](https://github.com/aaron-seq/NexusHome_IoT/issues/42) for integration work.
 
-```bash
-# Subscribe to all topics
-mosquitto_sub -h localhost -t "nexushome/#" -v
+## Containers and hosting
 
-# Publish a test message
-mosquitto_pub -h localhost -t "nexushome/devices/test-01/state" -m '{"power":"on"}'
-```
+The additional [Render](render.yaml), [Railway](railway.json), [Vercel](vercel.json), and [production Compose](docker-compose.prod.yml) files remain pending a supported-hosting decision ([#43](https://github.com/aaron-seq/NexusHome_IoT/issues/43)). They differ from the canonical Dockerfile/Compose configuration in provider, process, paths, ports, or probes. Their existence does not establish a validated production deployment.
 
-### Using MQTT Explorer (GUI)
-
-1. Download from: http://mqtt-explorer.com/
-2. Connect to `localhost:1883`
-3. Username: `nexususer` (or as configured)
-4. Password: From your `.env` file
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Before Submitting a PR
-
-1. Run tests: `make test`
-2. Format code: `make format`
-3. Check linting: `make lint`
-4. Update documentation if needed
-5. Add/update tests for new features
-
-## Additional Resources
-
-- [API Documentation](http://localhost:5000/swagger) (when running)
-- [Architecture Documentation](ARCHITECTURE.md)
-- [Security Guidelines](SECURITY.md)
-- [Contributing Guidelines](CONTRIBUTING.md)
-- [Code of Conduct](CODE_OF_CONDUCT.md)
-
-## Getting Help
-
-- **Issues**: https://github.com/aaron-seq/NexusHome_IoT/issues
-- **Discussions**: https://github.com/aaron-seq/NexusHome_IoT/discussions
-- **Email**: support@nexushome.tech
-
-## License
-
-See [LICENSE](LICENSE) for details.
+See [troubleshooting](docs/TROUBLESHOOTING.md) for failed probes, credentials, and connection diagnostics; preserve data volumes while investigating.
